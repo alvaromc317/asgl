@@ -2,12 +2,12 @@ from setuptools import setup, find_packages
 
 setup(
     name='asgl',
-    version='v0.0.1',
+    version='v0.0.2',
     author='Alvaro Mendez Civieta',
     author_email='almendez@est-econ.uc3m.es',
     license='GNU General Public License',
     zip_safe=False,
-    url='https://github.com/alvaromc317/ASGL',
+    url='https://github.com/alvaromc317/asgl/archive/v0.0.1.tar.gz',
     description='A regression solver for linear and quantile regression models and lasso based penalizations',
     python_requires='>=3.5',
     install_requires=["cvxpy >= 1.1.0",
