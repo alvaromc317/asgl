@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class ASGL:
-    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=None, alpha=None, tau=None,
-                 l_weights=None, gl_weights=None, solver='ECOS', parallel=False, num_cores=None):
+    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500):
         self.valid_models = ['lm', 'qr']
         self.valid_penalizations = ['lasso', 'gl', 'sgl', 'asgl', 'asgl_lasso', 'asgl_gl']
         self.model = model
@@ -22,12 +22,18 @@ class ASGL:
         self.lambda1 = lambda1
         self.alpha = alpha
         self.tau = tau
-        self.l_weights = l_weights
+        self.lasso_weights = lasso_weights
         self.gl_weights = gl_weights
-        self.solver = solver
         self.parallel = parallel
         self.num_cores = num_cores
+        self.max_iters = max_iters
         self.coef_ = None
+
+        # Define solver param as a list of the three default solvers for CVXPY
+        if solver is None:
+            self.solver = ['ECOS', 'OSQP', 'SCS']
+        else:
+            self.solver = [solver]
 
     # Model checker related functions #################################################################################
 
@@ -57,7 +63,7 @@ class ASGL:
             return True
         else:
             logger.error(f'{self.penalization} is not a valid penalization. '
-                  f'Valid penalizations are {self.valid_penalizations} or None')
+                         f'Valid penalizations are {self.valid_penalizations} or None')
             return False
 
     def __dtype_checker(self):
@@ -121,16 +127,16 @@ class ASGL:
         if 'asgl' in self.penalization:
             if weights is not None:
                 if isinstance(weights, list):
-                    # If l_weights is a list of lists -> convert to list of arrays
+                    # If weights is a list of lists -> convert to list of arrays
                     if isinstance(weights[0], list):
                         weights_list = [np.asarray(elt) for elt in weights]
-                    # If l_weights is a list of numbers -> store in a list
+                    # If weights is a list of numbers -> store in a list
                     elif isinstance(weights[0], (np.float, np.int)):
                         weights_list = [np.asarray(weights)]
                     else:
                         # If it is a list of arrays, maintain this way
                         weights_list = weights
-                # If l_weights is a ndarray -> store in a list and convert into list
+                # If weights is a ndarray -> store in a list and convert into list
                 elif isinstance(weights, np.ndarray):
                     weights_list = [weights]
                 if self.intercept:
@@ -138,7 +144,7 @@ class ASGL:
             n_weights = len(weights_list)
         return n_weights, weights_list
 
-    def __preprocessing_itertools_param(self, lambda_vector, alpha_vector, l_weights_list, gl_weights_list):
+    def __preprocessing_itertools_param(self, lambda_vector, alpha_vector, lasso_weights_list, gl_weights_list):
         """
         Receives as input the results from preprocessing_lambda, preprocessing_alpha and preprocessing_weights
         Outputs an iterable list of parameter values "param"
@@ -148,7 +154,7 @@ class ASGL:
         elif self.penalization == 'sgl':
             param = itertools.product(lambda_vector, alpha_vector)
         elif 'asgl' in self.penalization:
-            param = itertools.product(lambda_vector, alpha_vector, l_weights_list, gl_weights_list)
+            param = itertools.product(lambda_vector, alpha_vector, lasso_weights_list, gl_weights_list)
         else:
             param = None
             logger.error(f'Error preprocessing input parameters')
@@ -171,82 +177,24 @@ class ASGL:
             # Reformat parameter vectors
             n_lambda, lambda_vector = self.__preprocessing_lambda()
             n_alpha, alpha_vector = self.__preprocessing_alpha()
-            n_l_weights, l_weights_list = self.__preprocessing_weights(self.l_weights)
+            n_lasso_weights, lasso_weights_list = self.__preprocessing_weights(self.lasso_weights)
             n_gl_weights, gl_weights_list = self.__preprocessing_weights(self.gl_weights)
-            # Store correctly formatted parameters in self
-            self.lambda1 = lambda_vector
-            self.alpha = alpha_vector
-            self.l_weights = l_weights_list
-            self.gl_weights = gl_weights_list
-            param = self.__preprocessing_itertools_param(lambda_vector, alpha_vector, l_weights_list, gl_weights_list)
+            param = self.__preprocessing_itertools_param(lambda_vector, alpha_vector, lasso_weights_list,
+                                                         gl_weights_list)
         return param
 
-    # NUMBER OF PARAMETERS ############################################################################################
+    # CVXPY SOLVER RELATED OPTIONS ###################################################################################
 
-    def num_parameters(self):
-        """
-        retrieves the number of parameters to be considered in a model
-        Output: tuple [num_models, n_lambda, n_alpha, n_l_weights, n_gl_weights] where
-        - num_models: total number of models to be solved for the grid of parameters given
-        - n_lambda: number of different lambda1 values
-        - n_alpha: number of different alpha values
-        - n_l_weights: number of different weights for the lasso part of the asgl (or asgl_lasso) penalizations
-        - n_gl_weights: number of different weights for the lasso part of the asgl (or asgl_gl) penalizations
-        """
-        # Run the input_checker to verify that the inputs have the correct format
-        if self.__input_checker() is False:
-            logger.error('incorrect input parameters')
-            raise ValueError('incorrect input parameters')
-        if self.penalization is None:
-            # See meaning of each element in the "else" result statement.
-            result = [1, None, None, None, None]
+    def __cvxpy_solver_options(self, solver):
+        if solver == 'ECOS':
+            solver_dict = dict(solver=solver,
+                               max_iters=self.max_iters)
+        elif solver == 'OSQP':
+            solver_dict = dict(solver=solver,
+                               max_iter=self.max_iters)
         else:
-            n_lambda, drop = self.__preprocessing_lambda()
-            n_alpha, drop = self.__preprocessing_alpha()
-            n_l_weights, drop = self.__preprocessing_weights(self.l_weights)
-            n_gl_weights, drop = self.__preprocessing_weights(self.gl_weights)
-            list_param = [n_lambda, n_alpha, n_l_weights, n_gl_weights]
-            list_param_no_None = [elt for elt in list_param if elt]
-            num_models = np.prod(list_param_no_None)
-            result = [num_models, n_lambda, n_alpha, n_l_weights, n_gl_weights]
-        return result
-
-    def retrieve_parameters_given_param_index(self, param_index):
-        """
-        Given an index for the param iterable output from __preprocessing function, this function returns a tupple
-        with the index of the value of each parameter.
-        Example: Solving an adaptive sparse group lasso model with 5 values for lambda1, 4 values for alpha,
-                 3 possible lasso weights and 3 possible group lasso weights yields in a grid search on
-                 5*4*3*3=180 parameters.
-                 Inputing param_index=120 (out of the 180 possible values)in this function will output the
-                 lambda, alpha, and weights index for such value
-        If the penalization under consideration does not include any of the required parameters (for example, if we are
-        solving an sparse group lasso model, we do not consider adaptive weights), the output regarding the non used
-        parameters are set to be None.
-        """
-        n_models, n_lambda, n_alpha, n_l_weights, n_gl_weights = self.num_parameters()
-        if param_index > n_models:
-            string = f'param_index should be smaller or equal than the number of models solved. n_models={n_models}, ' \
-                     f'param_index={param_index}'
-            logger.error(string)
-            raise ValueError(string)
-        # If penalization is None, all parameters are set to None
-        if self.penalization is None:
-            result = [None, None, None, None]
-        # If penalization is lasso or gl, there is only one parameter, so param_index = position of that parameter
-        elif self.penalization in ['lasso', 'gl']:
-            result = [param_index, None, None, None]
-        # If penalization is sgl, there are two parameters and two None
-        elif self.penalization == 'sgl':
-            parameter_matrix = np.arange(n_models).reshape((n_lambda, n_alpha))
-            optimal_parameter_idx = np.where(parameter_matrix == param_index)
-            result = [optimal_parameter_idx[0][0], optimal_parameter_idx[1][0], None, None]
-        else:
-            parameter_matrix = np.arange(n_models).reshape((n_lambda, n_alpha, n_l_weights, n_gl_weights))
-            optimal_parameter_idx = np.where(parameter_matrix == param_index)
-            result = [optimal_parameter_idx[0][0], optimal_parameter_idx[1][0],
-                      optimal_parameter_idx[2][0], optimal_parameter_idx[3][0]]
-        return result
+            solver_dict = dict(solver=solver)
+        return solver_dict
 
     # SOLVERS #########################################################################################################
 
@@ -283,8 +231,19 @@ class ASGL:
             objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - x @ beta_var)))
         objective = cvxpy.Minimize(objective_function)
         problem = cvxpy.Problem(objective)
-        # Solve the problem
-        problem.solve(solver=getattr(cvxpy, self.solver))
+        # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a ValueError
+        # arises, try the solvers provided as input to the method.
+        try:
+            problem.solve(warm_start=True)
+        except (ValueError, cvxpy.error.SolverError):
+            for elt in self.solver:
+                solver_dict = self.__cvxpy_solver_options(solver=elt)
+                try:
+                    problem.solve(**solver_dict)
+                    if 'optimal' in problem.status:
+                        break
+                except (ValueError, cvxpy.error.SolverError):
+                    continue
         if problem.status in ["infeasible", "unbounded"]:
             logger.warning('Optimization problem status failure')
         beta_sol = beta_var.value
@@ -318,7 +277,19 @@ class ASGL:
         # Solve the problem iteratively for each parameter value
         for lam in param:
             lambda_param.value = lam
-            problem.solve(solver=getattr(cvxpy, self.solver))
+            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
+            # ValueError arises, try the solvers provided as input to the method.
+            try:
+                problem.solve(warm_start=True)
+            except (ValueError, cvxpy.error.SolverError):
+                for elt in self.solver:
+                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    try:
+                        problem.solve(**solver_dict)
+                        if 'optimal' in problem.status:
+                            break
+                    except (ValueError, cvxpy.error.SolverError):
+                        continue
             if problem.status in ["infeasible", "unbounded"]:
                 logger.warning('Optimization problem status failure')
             beta_sol = beta_var.value
@@ -366,7 +337,19 @@ class ASGL:
         # Solve the problem iteratively for each parameter value
         for lam in param:
             lambda_param.value = lam
-            problem.solve(solver=getattr(cvxpy, self.solver))
+            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
+            # ValueError arises, try the solvers provided as input to the method.
+            try:
+                problem.solve(warm_start=True)
+            except (ValueError, cvxpy.error.SolverError):
+                for elt in self.solver:
+                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    try:
+                        problem.solve(**solver_dict)
+                        if 'optimal' in problem.status:
+                            break
+                    except (ValueError, cvxpy.error.SolverError):
+                        continue
             if problem.status in ["infeasible", "unbounded"]:
                 logger.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
@@ -417,7 +400,19 @@ class ASGL:
         for lam, al in param:
             lasso_param.value = lam * al
             grp_lasso_param.value = lam * (1 - al)
-            problem.solve(solver=getattr(cvxpy, self.solver))
+            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
+            # ValueError arises, try the solvers provided as input to the method.
+            try:
+                problem.solve(warm_start=True)
+            except (ValueError, cvxpy.error.SolverError):
+                for elt in self.solver:
+                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    try:
+                        problem.solve(**solver_dict)
+                        if 'optimal' in problem.status:
+                            break
+                    except (ValueError, cvxpy.error.SolverError):
+                        continue
             if problem.status in ["infeasible", "unbounded"]:
                 logger.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
@@ -470,7 +465,19 @@ class ASGL:
         for lam, al, lw, glw in param:
             l_weights_param.value = lw * lam * al
             gl_weights_param.value = glw * lam * (1 - al)
-            problem.solve(solver=getattr(cvxpy, self.solver))
+            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
+            # ValueError arises, try the solvers provided as input to the method.
+            try:
+                problem.solve(warm_start=True)
+            except (ValueError, cvxpy.error.SolverError):
+                for elt in self.solver:
+                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    try:
+                        problem.solve(**solver_dict)
+                        if 'optimal' in problem.status:
+                            break
+                    except (ValueError, cvxpy.error.SolverError):
+                        continue
             if problem.status in ["infeasible", "unbounded"]:
                 logger.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
@@ -564,10 +571,97 @@ class ASGL:
             prediction_list.append(np.dot(x_new, elt))
         return prediction_list
 
+    # NUMBER OF PARAMETERS ############################################################################################
+
+    def _num_parameters(self):
+        """
+        retrieves the number of parameters to be considered in a model
+        Output: tuple [num_models, n_lambda, n_alpha, n_l_weights, n_gl_weights] where
+        - num_models: total number of models to be solved for the grid of parameters given
+        - n_lambda: number of different lambda1 values
+        - n_alpha: number of different alpha values
+        - n_l_weights: number of different weights for the lasso part of the asgl (or asgl_lasso) penalizations
+        - n_gl_weights: number of different weights for the lasso part of the asgl (or asgl_gl) penalizations
+        """
+        # Run the input_checker to verify that the inputs have the correct format
+        if self.__input_checker() is False:
+            logger.error('incorrect input parameters')
+            raise ValueError('incorrect input parameters')
+        if self.penalization is None:
+            # See meaning of each element in the "else" result statement.
+            result = [1, None, None, None, None]
+        else:
+            n_lambda, drop = self.__preprocessing_lambda()
+            n_alpha, drop = self.__preprocessing_alpha()
+            n_lasso_weights, drop = self.__preprocessing_weights(self.lasso_weights)
+            n_gl_weights, drop = self.__preprocessing_weights(self.gl_weights)
+            list_param = [n_lambda, n_alpha, n_lasso_weights, n_gl_weights]
+            list_param_no_None = [elt for elt in list_param if elt]
+            num_models = np.prod(list_param_no_None)
+            result = dict(num_models=num_models,
+                          n_lambda=n_lambda,
+                          n_alpha=n_alpha,
+                          n_lasso_weights=n_lasso_weights,
+                          n_gl_weights=n_gl_weights)
+        return result
+
+    def _retrieve_parameters_idx(self, param_index):
+        """
+        Given an index for the param iterable output from __preprocessing function, this function returns a tupple
+        with the index of the value of each parameter.
+        Example: Solving an adaptive sparse group lasso model with 5 values for lambda1, 4 values for alpha,
+                 3 possible lasso weights and 3 possible group lasso weights yields in a grid search on
+                 5*4*3*3=180 parameters.
+                 Inputing param_index=120 (out of the 180 possible values)in this function will output the
+                 lambda, alpha, and weights index for such value
+        If the penalization under consideration does not include any of the required parameters (for example, if we are
+        solving an sparse group lasso model, we do not consider adaptive weights), the output regarding the non used
+        parameters are set to be None.
+        """
+        number_parameters = self._num_parameters()
+        n_models, n_lambda, n_alpha, n_l_weights, n_gl_weights = [number_parameters[elt] for elt in number_parameters]
+        if param_index > n_models:
+            string = f'param_index should be smaller or equal than the number of models solved. n_models={n_models}, ' \
+                     f'param_index={param_index}'
+            logger.error(string)
+            raise ValueError(string)
+        # If penalization is None, all parameters are set to None
+        if self.penalization is None:
+            result = [None, None, None, None]
+        # If penalization is lasso or gl, there is only one parameter, so param_index = position of that parameter
+        elif self.penalization in ['lasso', 'gl']:
+            result = [param_index, None, None, None]
+        # If penalization is sgl, there are two parameters and two None
+        elif self.penalization == 'sgl':
+            parameter_matrix = np.arange(n_models).reshape((n_lambda, n_alpha))
+            parameter_idx = np.where(parameter_matrix == param_index)
+            result = [parameter_idx[0][0], parameter_idx[1][0], None, None]
+        else:
+            parameter_matrix = np.arange(n_models).reshape((n_lambda, n_alpha, n_l_weights, n_gl_weights))
+            parameter_idx = np.where(parameter_matrix == param_index)
+            result = [parameter_idx[0][0], parameter_idx[1][0],
+                      parameter_idx[2][0], parameter_idx[3][0]]
+        return result
+
+    def retrieve_parameters_value(self, param_index):
+        """
+        Converts the index output from retrieve_parameters_idx into the actual numerical value of the parameters.
+        Outputs None if the parameter was not used in the model formulation.
+        To be executed after fit method.
+        """
+        param_index = self._retrieve_parameters_idx(param_index)
+        result = [param[idx] if idx is not None else None for idx, param in
+                  zip(param_index, [self.lambda1, self.alpha, self.lasso_weights, self.gl_weights])]
+        result = dict(lambda1=result[0],
+                      alpha=result[1],
+                      lasso_weights=result[2],
+                      gl_weights=result[3])
+        return result
+
 
 # ERROR CALCULATOR METHOD #############################################################################################
 
-def quantile_function(y_true, y_pred, tau):
+def __quantile_function(y_true, y_pred, tau):
     """
     Quantile function required for error computation
     """
@@ -582,7 +676,7 @@ def error_calculator(y_true, prediction_list, error_type="MSE", tau=None):
         MSE=mean_squared_error,
         MAE=mean_absolute_error,
         MDAE=median_absolute_error,
-        QRE=quantile_function)
+        QRE=__quantile_function)
     valid_error_types = error_dict.keys()
     # Check that the error_type is a valid error type considered
     if error_type not in valid_error_types:

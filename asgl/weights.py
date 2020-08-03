@@ -11,19 +11,27 @@ logger = logging.getLogger(__name__)
 
 
 class WEIGHTS:
-    def __init__(self, penalization='asgl', tau=None, weight_technique='pca_pct', tol=1e-6,
-                 lasso_power_weight=None, gl_power_weight=None, variability_pct=0.8, spca_alpha=None,
-                 spca_ridge_alpha=None):
+    def __init__(self, model='lm', penalization='asgl', tau=0.5, weight_technique='pca_pct', weight_tol=1e-4,
+                 lasso_power_weight=1, gl_power_weight=1, variability_pct=0.9, spca_alpha=1e-5,
+                 spca_ridge_alpha=1e-2):
         self.valid_penalizations = ['asgl', 'asgl_lasso', 'asgl_gl']
+        self.model = model
         self.penalization = penalization
         self.tau = tau
         self.weight_technique = weight_technique
-        self.tol = tol
+        self.weight_tol = weight_tol
         self.lasso_power_weight = lasso_power_weight
         self.gl_power_weight = gl_power_weight
         self.variability_pct = variability_pct
         self.spca_alpha = spca_alpha
         self.spca_ridge_alpha = spca_ridge_alpha
+
+    # PREPROCESSING ###################################################################################################
+
+    def __preprocessing(self, power_weight):
+        if isinstance(power_weight, (np.int, np.float)):
+            power_weight = [power_weight]
+        return power_weight
 
     # WEIGHT TECHNIQUES ###############################################################################################
 
@@ -51,10 +59,7 @@ class WEIGHTS:
         t = pca.fit_transform(x)
         p = pca.components_.T
         # Solve an unpenalized qr model using the obtained PCs
-        if self.tau is None:
-            unpenalized_model = ASGL(model='lm', penalization=None, intercept=True)
-        else:
-            unpenalized_model = ASGL(model='qr', penalization=None, intercept=True, tau=self.tau)
+        unpenalized_model = ASGL(model=self.model, penalization=None, intercept=True, tau=self.tau)
         unpenalized_model.fit(x=t, y=y)
         beta_qr = unpenalized_model.coef_[0][1:]  # Remove intercept
         # Recover an estimation of the beta parameters and use it as weight
@@ -94,7 +99,16 @@ class WEIGHTS:
         """
         unpenalized_model = ASGL(model='qr', penalization=None, intercept=True, tau=self.tau)
         unpenalized_model.fit(x=x, y=y)
-        tmp_weight = unpenalized_model.coef_[0][1:]  # Remove intercept
+        tmp_weight = np.abs(unpenalized_model.coef_[0][1:])  # Remove intercept
+        return tmp_weight
+
+    def __unpenalized_lm(self, x, y):
+        """
+        Only for low dimensional frameworks. Computes the adpative weights based on unpenalized linear regression
+        """
+        unpenalized_model = ASGL(model='lm', penalization=None, intercept=True, tau=self.tau)
+        unpenalized_model.fit(x=x, y=y)
+        tmp_weight = np.abs(unpenalized_model.coef_[0][1:])  # Remove intercept
         return tmp_weight
 
     def __sparse_pca(self, x, y):
@@ -118,7 +132,7 @@ class WEIGHTS:
         # Update variability_pct
         self.variability_pct = np.min((self.variability_pct, np.max(fractions_of_explained_variance)))
         n_comp = np.argmax(fractions_of_explained_variance >= self.variability_pct) + 1
-        unpenalized_model = ASGL(model='qr', penalization=None, intercept=True, tau=self.tau)
+        unpenalized_model = ASGL(model=self.model, penalization=None, intercept=True, tau=self.tau)
         unpenalized_model.fit(x=t[:, 0:n_comp], y=y)
         beta_qr = unpenalized_model.coef_[0][1:]
         # Recover an estimation of the beta parameters and use it as weight
@@ -129,15 +143,17 @@ class WEIGHTS:
         return '_WEIGHTS__' + self.weight_technique
 
     def __lasso_weights_calculation(self, tmp_weight):
-        lasso_weights = [1/(tmp_weight ** elt + self.tol) for elt in self.lasso_power_weight]
+        self.lasso_power_weight = self.__preprocessing(self.lasso_power_weight)
+        lasso_weights = [1 / (tmp_weight ** elt + self.weight_tol) for elt in self.lasso_power_weight]
         return lasso_weights
 
     def __gl_weights_calculation(self, tmp_weight, group_index):
+        self.gl_power_weight = self.__preprocessing(self.gl_power_weight)
         unique_index = np.unique(group_index)
         gl_weights = []
         for glpw in self.gl_power_weight:
-            tmp_list = [1/(np.linalg.norm(tmp_weight[np.where(group_index == unique_index[i])[0]], 2) ** glpw +
-                           self.tol) for i in range(len(unique_index))]
+            tmp_list = [1 / (np.linalg.norm(tmp_weight[np.where(group_index == unique_index[i])[0]], 2) ** glpw +
+                             self.weight_tol) for i in range(len(unique_index))]
             tmp_list = np.asarray(tmp_list)
             gl_weights.append(tmp_list)
         return gl_weights
@@ -160,7 +176,6 @@ class WEIGHTS:
         else:
             lasso_weights = None
             gl_weights = None
-            string = f'Not a valid penalization for weight calculation. Valid penalizations are ' \
-                     f'{self.valid_penalizations}'
-            logger.error(string)
+            logger.error(f'Not a valid penalization for weight calculation. Valid penalizations '
+                         f'are {self.valid_penalizations}')
         return lasso_weights, gl_weights

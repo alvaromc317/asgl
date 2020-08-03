@@ -10,15 +10,16 @@ logger = logging.getLogger(__name__)
 
 
 class CvGeneralClass(asgl.ASGL):
-    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=None, alpha=None, tau=None,
-                 l_weights=None, gl_weights=None, solver='ECOS', parallel=False, num_cores=None,
-                 weight_technique='pca_pct', lasso_power_weight=None, gl_power_weight=None, variability_pct=0.8,
-                 spca_alpha=None, spca_ridge_alpha=None, error_type='QRE', random_state=None):
+    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='ECOS', max_iters=500,
+                 weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
+                 variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None):
         # ASGL
-        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, l_weights, gl_weights, solver,
-                         parallel, num_cores)
+        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
+                         num_cores, solver, max_iters)
         # Adaptive weights
         self.weight_technique = weight_technique
+        self.weight_tol = weight_tol
         self.lasso_power_weight = lasso_power_weight
         self.gl_power_weight = gl_power_weight
         self.variability_pct = variability_pct
@@ -33,48 +34,39 @@ class CvGeneralClass(asgl.ASGL):
     def fit_weights_and_model(self, x, y, group_index=None):
         if (self.penalization is not None) and ('asgl' in self.penalization):
             # Compute weights
-            weights_class = weights.WEIGHTS(penalization=self.penalization, tau=self.tau,
-                                            weight_technique=self.weight_technique,
+            weights_class = weights.WEIGHTS(model=self.model, penalization=self.penalization,
+                                            tau=self.tau, weight_technique=self.weight_technique,
                                             lasso_power_weight=self.lasso_power_weight,
                                             gl_power_weight=self.gl_power_weight,
-                                            variability_pct=self.variability_pct, spca_alpha=self.spca_alpha,
+                                            variability_pct=self.variability_pct,
+                                            spca_alpha=self.spca_alpha,
                                             spca_ridge_alpha=self.spca_ridge_alpha)
-            self.l_weights, self.gl_weights = weights_class.fit(x=x, y=y, group_index=group_index)
+            self.lasso_weights, self.gl_weights = weights_class.fit(x=x, y=y, group_index=group_index)
         # Solve the regression model and obtain coefficients
         self.fit(x=x, y=y, group_index=group_index)
 
-    # OPTIMAL PARAMETER SEARCH RELATED ################################################################################
 
-    def optimal_parameter_idx_to_value(self, optimal_parameters_idx):
-        """
-        optimal_parameters_idx: output from ASGL.retrieve_parameters_given_param_index() function
-        Given the index of the optimal parameters, this function retrieves its value
-        To be run only after cross validation or train validate test methods.
-        """
-        best_lambda = assign_value(self.lambda1, optimal_parameters_idx[0])
-        best_alpha = assign_value(self.alpha, optimal_parameters_idx[1])
-        best_lasso_power_weight = assign_value(self.lasso_power_weight, optimal_parameters_idx[2])
-        best_gl_power_weight = assign_value(self.gl_power_weight, optimal_parameters_idx[3])
-        return best_lambda, best_alpha, best_lasso_power_weight, best_gl_power_weight
+# CROSS VALIDATION CLASS ##############################################################################################
 
 
 class CV(CvGeneralClass):
-    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=None, alpha=None, tau=None,
-                 l_weights=None, gl_weights=None, solver='ECOS', parallel=False, num_cores=None,
-                 weight_technique='pca_pct', lasso_power_weight=None, gl_power_weight=None, variability_pct=0.8,
-                 spca_alpha=None, spca_ridge_alpha=None, error_type='QRE', random_state=None, nfolds=5):
+    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='ECOS', max_iters=500,
+                 weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
+                 variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None,
+                 nfolds=5):
         # ASGL
-        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, l_weights, gl_weights, solver,
-                         parallel, num_cores, weight_technique, lasso_power_weight, gl_power_weight, variability_pct,
-                         spca_alpha, spca_ridge_alpha, error_type, random_state)
+        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
+                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
+                         variability_pct, spca_alpha, spca_ridge_alpha, error_type, random_state)
         # Relative to cross validation / train validate / test
         self.nfolds = nfolds
 
     # SPLIT DATA METHODS ##############################################################################################
 
-    def __cross_validation_split(self, nrow):
+    def __cross_validation_split(self, nrows):
         # Randomly generate index
-        data_index = np.random.choice(nrow, nrow, replace=False)
+        data_index = np.random.choice(nrows, nrows, replace=False)
         # Split data into k folds
         k_folds = KFold(n_splits=self.nfolds).split(data_index)
         # List containing zips of (train, test) indices
@@ -99,7 +91,7 @@ class CV(CvGeneralClass):
         # Define random state if required
         if self.random_state is not None:
             np.random.seed(self.random_state)
-        cv_index = self.__cross_validation_split(nrow=x.shape[0])
+        cv_index = self.__cross_validation_split(nrows=x.shape[0])
         for zip_index in cv_index:
             error = self.__one_step_cross_validation(x, y, group_index=group_index, zip_index=zip_index)
             error_list.append(error)
@@ -107,15 +99,15 @@ class CV(CvGeneralClass):
 
 
 class TVT(CvGeneralClass):
-    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=None, alpha=None, tau=None,
-                 l_weights=None, gl_weights=None, solver='ECOS', parallel=False, num_cores=None,
-                 weight_technique='pca_pct', lasso_power_weight=None, gl_power_weight=None, variability_pct=0.8,
-                 spca_alpha=None, spca_ridge_alpha=None, error_type='QRE', random_state=None, train_pct=0.05,
-                 validate_pct=0.05, train_size=None, validate_size=None, ):
+    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='ECOS', max_iters=500,
+                 weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
+                 variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None,
+                 train_pct=0.05, validate_pct=0.05, train_size=None, validate_size=None, ):
 
-        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, l_weights, gl_weights, solver,
-                         parallel, num_cores, weight_technique, lasso_power_weight, gl_power_weight, variability_pct,
-                         spca_alpha, spca_ridge_alpha, error_type, random_state)
+        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
+                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
+                         variability_pct, spca_alpha, spca_ridge_alpha, error_type, random_state)
         # Relative to / train validate / test
         self.train_pct = train_pct
         self.validate_pct = validate_pct
@@ -124,13 +116,13 @@ class TVT(CvGeneralClass):
 
     # TRAIN VALIDATE TEST SPLIT #######################################################################################
 
-    def __train_validate_test_split(self, nrow):
+    def __train_validate_test_split(self, nrows):
         # Randomly generate index
-        data_index = np.random.choice(nrow, nrow, replace=False)
+        data_index = np.random.choice(nrows, nrows, replace=False)
         if self.train_size is None:
-            self.train_size = int(round(nrow * self.train_pct))
+            self.train_size = int(round(nrows * self.train_pct))
         if self.validate_size is None:
-            self.validate_size = int(round(nrow * self.validate_pct))
+            self.validate_size = int(round(nrows * self.validate_pct))
         # List of 3 elements of size train_size, validate_size, remaining_size
         split_index = np.split(data_index, [self.train_size, self.train_size + self.validate_size])
         return split_index
@@ -142,7 +134,7 @@ class TVT(CvGeneralClass):
         if self.random_state is not None:
             np.random.seed(self.random_state)
         # Split data
-        split_index = self.__train_validate_test_split(nrow=x.shape[0])
+        split_index = self.__train_validate_test_split(nrows=x.shape[0])
         x_train, x_validate, x_test = [x[idx, :] for idx in split_index]
         y_train, y_validate, y_test = [y[idx] for idx in split_index]
         test_index = split_index[2]
@@ -158,7 +150,7 @@ class TVT(CvGeneralClass):
         # Select the minimum error
         minimum_error_idx = np.argmin(validate_error)
         # Select the parameters index associated to mininum error values
-        optimal_parameters_idx = self.retrieve_parameters_given_param_index(minimum_error_idx)
+        optimal_parameters_idx = self._retrieve_parameters_idx(minimum_error_idx)
         # Optimal model
         optimal_betas = self.coef_[minimum_error_idx]
         prediction = self.predict(x_new=x[test_index, :])
@@ -172,8 +164,19 @@ class TVT(CvGeneralClass):
         return optimal_betas, optimal_parameters_idx, test_error
 
 
-def assign_value(elt, idx):
-    if idx is None:
-        return None
-    else:
-        return elt[idx]
+# TRAIN TEST SPLIT ###################################################################################################
+
+def train_test_split(nrows, train_size=None, train_pct=0.7, random_state=None):
+    # Define random state if required
+    if random_state is not None:
+        np.random.seed(random_state)
+    data_index = np.random.choice(nrows, nrows, replace=False)
+    if train_size is None:
+        train_size = int(round(nrows * train_pct))
+    # Check that nrows is larger than train_size
+    if nrows < train_size:
+        logger.error(f'Train size is too large. Input number of rows:{nrows}, current train_size: {train_size}')
+    # List of 2 elements of size train_size, remaining_size (test)
+    split_index = np.split(data_index, [train_size])
+    train_idx, test_idx = [elt for elt in split_index]
+    return train_idx, test_idx
