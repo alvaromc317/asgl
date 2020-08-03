@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class CvGeneralClass(asgl.ASGL):
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='ECOS', max_iters=500,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
                  variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None):
         # ASGL
@@ -51,10 +51,22 @@ class CvGeneralClass(asgl.ASGL):
 
 class CV(CvGeneralClass):
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='ECOS', max_iters=500,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
                  variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None,
                  nfolds=5):
+        """
+        Parameters:
+            All the parameters from ASGL class
+            All the parameters from WEIGHTS class
+            error_type: error measurement to use. Accepts:
+                'MSE': mean squared error
+                'MAE': mean absolute error
+                'MDAE': mean absolute deviation error
+                'QRE': quantile regression error
+            random_state: random state value in case reproducible data splits are required
+            nfolds: number of folds in which the dataset should be split. Default value is 5
+        """
         # ASGL
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
                          num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
@@ -100,7 +112,7 @@ class CV(CvGeneralClass):
 
 class TVT(CvGeneralClass):
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='ECOS', max_iters=500,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
                  variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None,
                  train_pct=0.05, validate_pct=0.05, train_size=None, validate_size=None, ):

@@ -14,6 +14,24 @@ class WEIGHTS:
     def __init__(self, model='lm', penalization='asgl', tau=0.5, weight_technique='pca_pct', weight_tol=1e-4,
                  lasso_power_weight=1, gl_power_weight=1, variability_pct=0.9, spca_alpha=1e-5,
                  spca_ridge_alpha=1e-2):
+        """
+        Parameters:
+            model: model to be fit using these weights (accepts 'lm' or 'qr')
+            penalization: penalization to use ('asgl', 'asgl_lasso', 'asgl_gl')
+            tau: quantile level in quantile regression models
+            weight_technique: weight technique to use for fitting the adaptive weights. Accepts 'pca_1', 'pca_pct',
+                    'pls_1', 'pls_pct', 'unpenalized_lm', 'unpenalized_qr', 'spca'
+            weight_tol: Tolerance value used for avoiding ZeroDivision errors
+            lasso_power_weight: parameter value, power at which the lasso weights are risen
+            gl_power_weight: parameter value, power at which the group lasso weights are risen
+            variability_pct: parameter value, percentage of variability explained by pca or pls components used in
+                    'pca_pct', 'pls_pct' and 'spca'
+            spca_alpha: sparse PCA parameter
+            spca_ridge_alpha: sparse PCA parameter
+        Returns:
+            This is a class definition so there is no return. Main method of this class is fit, that returns adaptive
+            weights computed based on the class input parameters.
+        """
         self.valid_penalizations = ['asgl', 'asgl_lasso', 'asgl_gl']
         self.model = model
         self.penalization = penalization

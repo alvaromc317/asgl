@@ -13,6 +13,27 @@ logger = logging.getLogger(__name__)
 class ASGL:
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
                  lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500):
+        """
+        Parameters:
+            model: model to be fit (accepts 'lm' or 'qr')
+            penalization: penalization to use (accepts None, 'lasso', 'gl', 'sgl', 'asgl', 'asgl_lasso', 'asgl_gl')
+            intercept: boolean, wheter to fit the model including intercept or not
+            tol:  tolerance for a coefficient in the model to be considered as 0
+            lambda1: parameter value that controls the level of shrinkage applied on penalizations
+            alpha: parameter value, tradeoff between lasso and group lasso in sgl penalization
+            tau: quantile level in quantile regression models
+            lasso_weights: lasso weights in adaptive penalizations
+            gl_weights: group lasso weights in adaptive penalizations
+            parallel: boolean, wheter to execute the code in parallel or sequentially
+            num_cores: if parallel is set to true, the number of cores to use in the execution. Default is (max - 1)
+            solver: solver to be used by CVXPY. Default uses optimal alternative depending on the problem
+            max_iters: CVXPY parameter. Default is 500
+
+        Returns:
+            This is a class definition so there is no return. Main method of this class is fit,  that has no return
+            but outputs automatically to _coef.
+            ASGL._coef stores a list of regression model coefficients.
+        """
         self.valid_models = ['lm', 'qr']
         self.valid_penalizations = ['lasso', 'gl', 'sgl', 'asgl', 'asgl_lasso', 'asgl_gl']
         self.model = model
