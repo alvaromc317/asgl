@@ -10,10 +10,12 @@ The current version of the package supports:
 
 And considers the following penalizations for variable selection:
 
-* No penalized models 
+* No penalized models
 * lasso
 * group lasso
 * sparse group lasso
+* adaptive lasso
+* adaptive group lassso
 * adaptive sparse group lasso
 
 ## Requirements 
@@ -27,7 +29,7 @@ The following code performs cross validation in a grid of
 different parameter values for an sparse group lasso model on the well known 
 `BostonHousing` dataset:
 
-```python3
+```
 # Import required packages
 import numpy as np
 from sklearn.datasets import load_boston

@@ -16,15 +16,16 @@ class ASGL:
         """
         Parameters:
             model: model to be fit (accepts 'lm' or 'qr')
-            penalization: penalization to use (accepts None, 'lasso', 'gl', 'sgl', 'asgl', 'asgl_lasso', 'asgl_gl')
-            intercept: boolean, wheter to fit the model including intercept or not
+            penalization: penalization to use (accepts None, 'lasso', 'gl', 'sgl', 'asgl', 'asgl_lasso', 'asgl_gl',
+                          alasso, agl)
+            intercept: boolean, whether to fit the model including intercept or not
             tol:  tolerance for a coefficient in the model to be considered as 0
             lambda1: parameter value that controls the level of shrinkage applied on penalizations
             alpha: parameter value, tradeoff between lasso and group lasso in sgl penalization
             tau: quantile level in quantile regression models
             lasso_weights: lasso weights in adaptive penalizations
             gl_weights: group lasso weights in adaptive penalizations
-            parallel: boolean, wheter to execute the code in parallel or sequentially
+            parallel: boolean, whether to execute the code in parallel or sequentially
             num_cores: if parallel is set to true, the number of cores to use in the execution. Default is (max - 1)
             solver: solver to be used by CVXPY. Default uses optimal alternative depending on the problem
             max_iters: CVXPY parameter. Default is 500
@@ -35,7 +36,7 @@ class ASGL:
             ASGL._coef stores a list of regression model coefficients.
         """
         self.valid_models = ['lm', 'qr']
-        self.valid_penalizations = ['lasso', 'gl', 'sgl', 'asgl', 'asgl_lasso', 'asgl_gl']
+        self.valid_penalizations = ['lasso', 'gl', 'sgl', 'alasso', 'agl', 'asgl', 'asgl_lasso', 'asgl_gl']
         self.model = model
         self.penalization = penalization
         self.intercept = intercept
@@ -49,7 +50,6 @@ class ASGL:
         self.num_cores = num_cores
         self.max_iters = max_iters
         self.coef_ = None
-
         # Define solver param as a list of the three default solvers for CVXPY
         if solver is None:
             self.solver = ['ECOS', 'OSQP', 'SCS']
@@ -111,7 +111,7 @@ class ASGL:
 
     def __preprocessing_lambda(self):
         """
-        Processes the input lambda1 parameter and transforms it as required by the solver pacakge functions
+        Processes the input lambda1 parameter and transforms it as required by the solver package functions
         """
         n_lambda = None
         lambda_vector = None
@@ -126,7 +126,7 @@ class ASGL:
     def __preprocessing_alpha(self):
         """
         Processes the input alpha parameter from sgl and asgl penalizations and transforms it as required by the solver
-        pacakge functions
+        package functions
         """
         n_alpha = None
         alpha_vector = None
@@ -145,7 +145,7 @@ class ASGL:
         """
         n_weights = None
         weights_list = None
-        if 'asgl' in self.penalization:
+        if self.penalization in ['asgl', 'asgl_lasso', 'asgl_gl', 'alasso', 'agl']:
             if weights is not None:
                 if isinstance(weights, list):
                     # If weights is a list of lists -> convert to list of arrays
@@ -162,7 +162,7 @@ class ASGL:
                     weights_list = [weights]
                 if self.intercept:
                     weights_list = [np.insert(elt, 0, 0, axis=0) for elt in weights_list]
-            n_weights = len(weights_list)
+                n_weights = len(weights_list)
         return n_weights, weights_list
 
     def __preprocessing_itertools_param(self, lambda_vector, alpha_vector, lasso_weights_list, gl_weights_list):
@@ -174,6 +174,10 @@ class ASGL:
             param = lambda_vector
         elif self.penalization == 'sgl':
             param = itertools.product(lambda_vector, alpha_vector)
+        elif self.penalization == 'alasso':
+            param = itertools.product(lambda_vector, lasso_weights_list)
+        elif self.penalization == 'agl':
+            param = itertools.product(lambda_vector, gl_weights_list)
         elif 'asgl' in self.penalization:
             param = itertools.product(lambda_vector, alpha_vector, lasso_weights_list, gl_weights_list)
         else:
@@ -441,6 +445,113 @@ class ASGL:
             beta_sol_list.append(beta_sol)
         return beta_sol_list
 
+    def alasso(self, x, y, param):
+        """
+        Lasso penalized solver
+        """
+        n, m = x.shape
+        # If we want an intercept, it adds a column of ones to the matrix x.
+        # Init_pen controls when the penalization starts, this way the intercept is not penalized
+        if self.intercept:
+            m = m + 1
+            x = np.c_[np.ones(n), x]
+            init_pen = 1
+        else:
+            init_pen = 0
+        # Define the objective function
+        l_weights_param = cvxpy.Parameter(m, nonneg=True)
+        beta_var = cvxpy.Variable(m)
+        lasso_penalization = cvxpy.norm(l_weights_param[init_pen:].T @ cvxpy.abs(beta_var[init_pen:]), 1)
+        if self.model == 'lm':
+            objective_function = (1.0 / n) * cvxpy.sum_squares(y - x @ beta_var)
+        else:
+            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - x @ beta_var)))
+        objective = cvxpy.Minimize(objective_function + lasso_penalization)
+        problem = cvxpy.Problem(objective)
+        beta_sol_list = []
+        # Solve the problem iteratively for each parameter value
+        for lam, lw in param:
+            l_weights_param.value = lam * lw
+            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
+            # ValueError arises, try the solvers provided as input to the method.
+            try:
+                problem.solve(warm_start=True)
+            except (ValueError, cvxpy.error.SolverError):
+                for elt in self.solver:
+                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    try:
+                        problem.solve(**solver_dict)
+                        if 'optimal' in problem.status:
+                            break
+                    except (ValueError, cvxpy.error.SolverError):
+                        continue
+            if problem.status in ["infeasible", "unbounded"]:
+                logger.warning('Optimization problem status failure')
+            beta_sol = beta_var.value
+            beta_sol[np.abs(beta_sol) < self.tol] = 0
+            beta_sol_list.append(beta_sol)
+        logger.debug('Function finished without errors')
+        return beta_sol_list
+
+    def agl(self, x, y, group_index, param):
+        """
+        Group lasso penalized solver
+        """
+        n = x.shape[0]
+        # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
+        unique_group_index = np.unique(group_index)
+        group_sizes, beta_var = self.__num_beta_var_from_group_index(group_index)
+        num_groups = len(group_sizes)
+        model_prediction = 0
+        group_lasso_penalization = 0
+        # If the model has an intercept, we calculate the value of the model for the intercept group_index
+        # We start the penalization in inf_lim so if the model has an intercept, penalization starts after the intercept
+        inf_lim = 0
+        if self.intercept:
+            # Adds an element (referring to the intercept) to group_index, group_sizes, num groups
+            group_index = np.append(0, group_index)
+            unique_group_index = np.unique(group_index)
+            x = np.c_[np.ones(n), x]
+            group_sizes = [1] + group_sizes
+            beta_var = [cvxpy.Variable(1)] + beta_var
+            num_groups = num_groups + 1
+            # Compute model prediction for the intercept with no penalization
+            model_prediction = x[:, np.where(group_index == unique_group_index[0])[0]] @ beta_var[0]
+            inf_lim = 1
+        gl_weights_param = cvxpy.Parameter(num_groups, nonneg=True)
+        for i in range(inf_lim, num_groups):
+            model_prediction += x[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
+            group_lasso_penalization += cvxpy.sqrt(group_sizes[i]) * gl_weights_param[i] * cvxpy.norm(beta_var[i], 2)
+        if self.model == 'lm':
+            objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
+        else:
+            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - model_prediction)))
+        objective = cvxpy.Minimize(objective_function + group_lasso_penalization)
+        problem = cvxpy.Problem(objective)
+        beta_sol_list = []
+        # Solve the problem iteratively for each parameter value
+        for lam, gl in param:
+            gl_weights_param.value = lam * gl
+            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
+            # ValueError arises, try the solvers provided as input to the method.
+            try:
+                problem.solve(warm_start=True)
+            except (ValueError, cvxpy.error.SolverError):
+                for elt in self.solver:
+                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    try:
+                        problem.solve(**solver_dict)
+                        if 'optimal' in problem.status:
+                            break
+                    except (ValueError, cvxpy.error.SolverError):
+                        continue
+            if problem.status in ["infeasible", "unbounded"]:
+                logger.warning('Optimization problem status failure')
+            beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
+            beta_sol[np.abs(beta_sol) < self.tol] = 0
+            beta_sol_list.append(beta_sol)
+        return beta_sol_list
+
     def asgl(self, x, y, group_index, param):
         """
         adaptive sparse group lasso penalized solver
@@ -531,7 +642,7 @@ class ASGL:
             chunks.append(param[elt[0]:(1 + elt[-1])])
         # Solve problem in parallel
         pool = mp.Pool(num_chunks)
-        if self.penalization == 'lasso':
+        if self.penalization in ['lasso', 'alasso']:
             global_results = pool.map(functools.partial(getattr(self, self.__get_solver_names()), x, y), chunks)
         else:
             global_results = pool.map(functools.partial(getattr(self, self.__get_solver_names()), x, y, group_index),
@@ -566,7 +677,7 @@ class ASGL:
             self.coef_ = self.unpenalized_solver(x=x, y=y)
         else:
             if self.parallel is False:
-                if self.penalization == 'lasso':
+                if self.penalization in ['lasso', 'alasso']:
                     self.coef_ = getattr(self, self.__get_solver_names())(x=x, y=y, param=param)
                 else:
                     self.coef_ = getattr(self, self.__get_solver_names())(x=x, y=y, param=param,
@@ -617,8 +728,8 @@ class ASGL:
             n_lasso_weights, drop = self.__preprocessing_weights(self.lasso_weights)
             n_gl_weights, drop = self.__preprocessing_weights(self.gl_weights)
             list_param = [n_lambda, n_alpha, n_lasso_weights, n_gl_weights]
-            list_param_no_None = [elt for elt in list_param if elt]
-            num_models = np.prod(list_param_no_None)
+            list_param_no_none = [elt for elt in list_param if elt is not None]
+            num_models = np.prod(list_param_no_none)
             result = dict(num_models=num_models,
                           n_lambda=n_lambda,
                           n_alpha=n_alpha,
@@ -657,6 +768,14 @@ class ASGL:
             parameter_matrix = np.arange(n_models).reshape((n_lambda, n_alpha))
             parameter_idx = np.where(parameter_matrix == param_index)
             result = [parameter_idx[0][0], parameter_idx[1][0], None, None]
+        elif self.penalization == 'alasso':
+            parameter_matrix = np.arange(n_models).reshape((n_lambda, n_l_weights))
+            parameter_idx = np.where(parameter_matrix == param_index)
+            result = [parameter_idx[0][0], None, parameter_idx[1][0], None]
+        elif self.penalization == 'agl':
+            parameter_matrix = np.arange(n_models).reshape((n_lambda, n_gl_weights))
+            parameter_idx = np.where(parameter_matrix == param_index)
+            result = [parameter_idx[0][0], None, None, parameter_idx[1][0]]
         else:
             parameter_matrix = np.arange(n_models).reshape((n_lambda, n_alpha, n_l_weights, n_gl_weights))
             parameter_idx = np.where(parameter_matrix == param_index)

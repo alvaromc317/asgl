@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class WEIGHTS:
     def __init__(self, model='lm', penalization='asgl', tau=0.5, weight_technique='pca_pct', weight_tol=1e-4,
-                 lasso_power_weight=1, gl_power_weight=1, variability_pct=0.9, spca_alpha=1e-5,
+                 lasso_power_weight=1, gl_power_weight=1, variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5,
                  spca_ridge_alpha=1e-2):
         """
         Parameters:
@@ -26,13 +26,14 @@ class WEIGHTS:
             gl_power_weight: parameter value, power at which the group lasso weights are risen
             variability_pct: parameter value, percentage of variability explained by pca or pls components used in
                     'pca_pct', 'pls_pct' and 'spca'
+            lambda1_weights: in case lasso is used as weight calculation alternative, the value for lambda1
             spca_alpha: sparse PCA parameter
             spca_ridge_alpha: sparse PCA parameter
         Returns:
             This is a class definition so there is no return. Main method of this class is fit, that returns adaptive
             weights computed based on the class input parameters.
         """
-        self.valid_penalizations = ['asgl', 'asgl_lasso', 'asgl_gl']
+        self.valid_penalizations = ['alasso', 'agl', 'asgl', 'asgl_lasso', 'asgl_gl']
         self.model = model
         self.penalization = penalization
         self.tau = tau
@@ -41,6 +42,7 @@ class WEIGHTS:
         self.lasso_power_weight = lasso_power_weight
         self.gl_power_weight = gl_power_weight
         self.variability_pct = variability_pct
+        self.lambda1_weights = lambda1_weights
         self.spca_alpha = spca_alpha
         self.spca_ridge_alpha = spca_ridge_alpha
 
@@ -111,20 +113,11 @@ class WEIGHTS:
         tmp_weight = np.abs(np.asarray(pls.coef_).flatten())
         return tmp_weight
 
-    def __unpenalized_qr(self, x, y):
+    def __unpenalized(self, x, y):
         """
-        Only for low dimensional frameworks. Computes the adpative weights based on unpenalized quantile regression
+        Only for low dimensional frameworks. Computes the adpative weights based on unpenalized regression model
         """
-        unpenalized_model = ASGL(model='qr', penalization=None, intercept=True, tau=self.tau)
-        unpenalized_model.fit(x=x, y=y)
-        tmp_weight = np.abs(unpenalized_model.coef_[0][1:])  # Remove intercept
-        return tmp_weight
-
-    def __unpenalized_lm(self, x, y):
-        """
-        Only for low dimensional frameworks. Computes the adpative weights based on unpenalized linear regression
-        """
-        unpenalized_model = ASGL(model='lm', penalization=None, intercept=True, tau=self.tau)
+        unpenalized_model = ASGL(model=self.model, penalization=None, intercept=True, tau=self.tau)
         unpenalized_model.fit(x=x, y=y)
         tmp_weight = np.abs(unpenalized_model.coef_[0][1:])  # Remove intercept
         return tmp_weight
@@ -157,6 +150,13 @@ class WEIGHTS:
         tmp_weight = np.abs(np.dot(p[:, 0:n_comp], beta_qr)).flatten()
         return tmp_weight
 
+    def __lasso(self, x, y):
+        lasso_model = ASGL(model=self.model, penalization='lasso', lambda1=self.lambda1_weights, intercept=True,
+                           tau=self.tau)
+        lasso_model.fit(x=x, y=y)
+        tmp_weight = np.abs(lasso_model.coef_[0][1:])  # Remove intercept
+        return tmp_weight
+
     def __weight_techniques_names(self):
         return '_WEIGHTS__' + self.weight_technique
 
@@ -182,7 +182,13 @@ class WEIGHTS:
         the specified weights.
         """
         tmp_weight = getattr(self, self.__weight_techniques_names())(x=x, y=y)
-        if self.penalization == 'asgl_lasso':
+        if self.penalization == 'alasso':
+            lasso_weights = self.__lasso_weights_calculation(tmp_weight)
+            gl_weights = None
+        elif self.penalization == 'agl':
+            lasso_weights = None
+            gl_weights = self.__gl_weights_calculation(tmp_weight, group_index)
+        elif self.penalization == 'asgl_lasso':
             lasso_weights = self.__lasso_weights_calculation(tmp_weight)
             gl_weights = np.ones(len(np.unique(group_index)))
         elif self.penalization == 'asgl_gl':

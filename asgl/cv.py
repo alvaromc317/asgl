@@ -13,7 +13,8 @@ class CvGeneralClass(asgl.ASGL):
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
                  lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
-                 variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None):
+                 variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE',
+                 random_state=None):
         # ASGL
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
                          num_cores, solver, max_iters)
@@ -23,6 +24,7 @@ class CvGeneralClass(asgl.ASGL):
         self.lasso_power_weight = lasso_power_weight
         self.gl_power_weight = gl_power_weight
         self.variability_pct = variability_pct
+        self.lambda1_weights = lambda1_weights
         self.spca_alpha = spca_alpha
         self.spca_ridge_alpha = spca_ridge_alpha
         # Relative to CV
@@ -32,13 +34,15 @@ class CvGeneralClass(asgl.ASGL):
     # FIT WEIGHT AND MODEL ############################################################################################
 
     def fit_weights_and_model(self, x, y, group_index=None):
-        if (self.penalization is not None) and ('asgl' in self.penalization):
+        if (self.penalization is not None) and \
+                (self.penalization in ['alasso', 'agl', 'asgl', 'asgl_lasso', 'asgl_gl']):
             # Compute weights
             weights_class = weights.WEIGHTS(model=self.model, penalization=self.penalization,
                                             tau=self.tau, weight_technique=self.weight_technique,
                                             lasso_power_weight=self.lasso_power_weight,
                                             gl_power_weight=self.gl_power_weight,
                                             variability_pct=self.variability_pct,
+                                            lambda1_weights=self.lambda1_weights,
                                             spca_alpha=self.spca_alpha,
                                             spca_ridge_alpha=self.spca_ridge_alpha)
             self.lasso_weights, self.gl_weights = weights_class.fit(x=x, y=y, group_index=group_index)
@@ -53,8 +57,8 @@ class CV(CvGeneralClass):
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
                  lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
-                 variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None,
-                 nfolds=5):
+                 variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE',
+                 random_state=None, nfolds=5):
         """
         Parameters:
             All the parameters from ASGL class
@@ -70,7 +74,7 @@ class CV(CvGeneralClass):
         # ASGL
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
                          num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
-                         variability_pct, spca_alpha, spca_ridge_alpha, error_type, random_state)
+                         variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type, random_state)
         # Relative to cross validation / train validate / test
         self.nfolds = nfolds
 
@@ -98,7 +102,7 @@ class CV(CvGeneralClass):
                                       tau=self.tau)
         return error
 
-    def cross_validation(self, x, y, group_index):
+    def cross_validation(self, x, y, group_index=None):
         error_list = []
         # Define random state if required
         if self.random_state is not None:
@@ -114,12 +118,12 @@ class TVT(CvGeneralClass):
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
                  lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
-                 variability_pct=0.9, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE', random_state=None,
-                 train_pct=0.05, validate_pct=0.05, train_size=None, validate_size=None, ):
+                 variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE',
+                 random_state=None, train_pct=0.05, validate_pct=0.05, train_size=None, validate_size=None):
 
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
                          num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
-                         variability_pct, spca_alpha, spca_ridge_alpha, error_type, random_state)
+                         variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type, random_state)
         # Relative to / train validate / test
         self.train_pct = train_pct
         self.validate_pct = validate_pct
@@ -141,7 +145,7 @@ class TVT(CvGeneralClass):
 
     # TRAIN VALIDATE TEST #############################################################################################
 
-    def __train_validate(self, x, y, group_index):
+    def __train_validate(self, x, y, group_index=None):
         # Define random state if required
         if self.random_state is not None:
             np.random.seed(self.random_state)
@@ -170,7 +174,7 @@ class TVT(CvGeneralClass):
                                            error_type=self.error_type, tau=self.tau)
         return optimal_betas, optimal_parameters_idx, test_error
 
-    def train_validate_test(self, x, y, group_index):
+    def train_validate_test(self, x, y, group_index=None):
         validate_error, test_index = self.__train_validate(x, y, group_index)
         optimal_betas, optimal_parameters_idx, test_error = self.__tv_test(x, y, validate_error, test_index)
         return optimal_betas, optimal_parameters_idx, test_error
