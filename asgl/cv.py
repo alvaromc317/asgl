@@ -151,8 +151,8 @@ class TVT(CvGeneralClass):
             np.random.seed(self.random_state)
         # Split data
         split_index = self.__train_validate_test_split(nrows=x.shape[0])
-        x_train, x_validate, x_test = [x[idx, :] for idx in split_index]
-        y_train, y_validate, y_test = [y[idx] for idx in split_index]
+        x_train, x_validate, drop = [x[idx, :] for idx in split_index]
+        y_train, y_validate, drop = [y[idx] for idx in split_index]
         test_index = split_index[2]
         # Solve models
         self.fit_weights_and_model(x=x_train, y=y_train, group_index=group_index)
@@ -166,18 +166,22 @@ class TVT(CvGeneralClass):
         # Select the minimum error
         minimum_error_idx = np.argmin(validate_error)
         # Select the parameters index associated to mininum error values
-        optimal_parameters_idx = self._retrieve_parameters_idx(minimum_error_idx)
-        # Optimal model
+        optimal_parameters = self.retrieve_parameters_value(minimum_error_idx)
+        # Minimum error model
         optimal_betas = self.coef_[minimum_error_idx]
-        prediction = self.predict(x_new=x[test_index, :])
-        test_error = asgl.error_calculator(y_true=y[test_index], prediction_list=prediction,
+        test_prediction = [self.predict(x_new=x[test_index, :])[minimum_error_idx]]
+        test_error = asgl.error_calculator(y_true=y[test_index], prediction_list=test_prediction,
                                            error_type=self.error_type, tau=self.tau)
-        return optimal_betas, optimal_parameters_idx, test_error
+        return optimal_betas, optimal_parameters, test_error
 
     def train_validate_test(self, x, y, group_index=None):
         validate_error, test_index = self.__train_validate(x, y, group_index)
-        optimal_betas, optimal_parameters_idx, test_error = self.__tv_test(x, y, validate_error, test_index)
-        return optimal_betas, optimal_parameters_idx, test_error
+        optimal_betas, optimal_parameters, test_error = self.__tv_test(x, y, validate_error, test_index)
+        result = dict(
+            optimal_betas=optimal_betas,
+            optimal_parameters=optimal_parameters,
+            test_error=test_error)
+        return result
 
 
 # TRAIN TEST SPLIT ###################################################################################################
