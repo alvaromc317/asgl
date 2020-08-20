@@ -71,7 +71,7 @@ class CV(CvGeneralClass):
             random_state: random state value in case reproducible data splits are required
             nfolds: number of folds in which the dataset should be split. Default value is 5
         """
-        # ASGL
+        # CvGeneralClass
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
                          num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
                          variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type, random_state)
