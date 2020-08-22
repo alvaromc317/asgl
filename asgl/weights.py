@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import numpy as np
 from sklearn.cross_decomposition import PLSRegression
@@ -7,7 +8,7 @@ from sklearn.decomposition import SparsePCA
 
 from .asgl import ASGL
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class WEIGHTS:
@@ -200,6 +201,6 @@ class WEIGHTS:
         else:
             lasso_weights = None
             gl_weights = None
-            logger.error(f'Not a valid penalization for weight calculation. Valid penalizations '
-                         f'are {self.valid_penalizations}')
+            logging.error(f'Not a valid penalization for weight calculation. Valid penalizations '
+                          f'are {self.valid_penalizations}')
         return lasso_weights, gl_weights

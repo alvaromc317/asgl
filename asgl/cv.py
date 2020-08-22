@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import numpy as np
 from sklearn.model_selection import KFold
@@ -6,7 +7,7 @@ from sklearn.model_selection import KFold
 from . import asgl
 from . import weights
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class CvGeneralClass(asgl.ASGL):
@@ -73,8 +74,9 @@ class CV(CvGeneralClass):
         """
         # CvGeneralClass
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
-                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
-                         variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type, random_state)
+                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight,
+                         gl_power_weight, variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type,
+                         random_state)
         # Relative to cross validation / train validate / test
         self.nfolds = nfolds
 
@@ -122,8 +124,9 @@ class TVT(CvGeneralClass):
                  random_state=None, train_pct=0.05, validate_pct=0.05, train_size=None, validate_size=None):
 
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
-                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight, gl_power_weight,
-                         variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type, random_state)
+                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight,
+                         gl_power_weight, variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type,
+                         random_state)
         # Relative to / train validate / test
         self.train_pct = train_pct
         self.validate_pct = validate_pct
@@ -195,7 +198,7 @@ def train_test_split(nrows, train_size=None, train_pct=0.7, random_state=None):
         train_size = int(round(nrows * train_pct))
     # Check that nrows is larger than train_size
     if nrows < train_size:
-        logger.error(f'Train size is too large. Input number of rows:{nrows}, current train_size: {train_size}')
+        logging.error(f'Train size is too large. Input number of rows:{nrows}, current train_size: {train_size}')
     # List of 2 elements of size train_size, remaining_size (test)
     split_index = np.split(data_index, [train_size])
     train_idx, test_idx = [elt for elt in split_index]

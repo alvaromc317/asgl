@@ -1,3 +1,4 @@
+import sys
 import functools
 import itertools
 import logging
@@ -7,7 +8,7 @@ import cvxpy
 import numpy as np
 from sklearn.metrics import mean_absolute_error, median_absolute_error, mean_squared_error
 
-logger = logging.getLogger(__name__)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class ASGL:
@@ -67,7 +68,7 @@ class ASGL:
         if self.model in self.valid_models:
             return True
         else:
-            logger.error(f'{self.model} is not a valid model. Valid models are {self.valid_models}')
+            logging.error(f'{self.model} is not a valid model. Valid models are {self.valid_models}')
             return False
 
     def __penalization_checker(self):
@@ -83,8 +84,8 @@ class ASGL:
         if (self.penalization in self.valid_penalizations) or (self.penalization is None):
             return True
         else:
-            logger.error(f'{self.penalization} is not a valid penalization. '
-                         f'Valid penalizations are {self.valid_penalizations} or None')
+            logging.error(f'{self.penalization} is not a valid penalization. '
+                          f'Valid penalizations are {self.valid_penalizations} or None')
             return False
 
     def __dtype_checker(self):
@@ -182,7 +183,7 @@ class ASGL:
             param = itertools.product(lambda_vector, alpha_vector, lasso_weights_list, gl_weights_list)
         else:
             param = None
-            logger.error(f'Error preprocessing input parameters')
+            logging.error(f'Error preprocessing input parameters')
         param = list(param)
         return param
 
@@ -193,7 +194,7 @@ class ASGL:
         """
         # Run the input_checker to verify that the inputs have the correct format
         if self.__input_checker() is False:
-            logger.error('incorrect input parameters')
+            logging.error('incorrect input parameters')
             raise ValueError('incorrect input parameters')
         # Defines param as None for the unpenalized model
         if self.penalization is None:
@@ -270,7 +271,7 @@ class ASGL:
                 except (ValueError, cvxpy.error.SolverError):
                     continue
         if problem.status in ["infeasible", "unbounded"]:
-            logger.warning('Optimization problem status failure')
+            logging.warning('Optimization problem status failure')
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
         return [beta_sol]
@@ -316,11 +317,11 @@ class ASGL:
                     except (ValueError, cvxpy.error.SolverError):
                         continue
             if problem.status in ["infeasible", "unbounded"]:
-                logger.warning('Optimization problem status failure')
+                logging.warning('Optimization problem status failure')
             beta_sol = beta_var.value
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
-        logger.debug('Function finished without errors')
+        logging.debug('Function finished without errors')
         return beta_sol_list
 
     def gl(self, x, y, group_index, param):
@@ -376,7 +377,7 @@ class ASGL:
                     except (ValueError, cvxpy.error.SolverError):
                         continue
             if problem.status in ["infeasible", "unbounded"]:
-                logger.warning('Optimization problem status failure')
+                logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
@@ -439,7 +440,7 @@ class ASGL:
                     except (ValueError, cvxpy.error.SolverError):
                         continue
             if problem.status in ["infeasible", "unbounded"]:
-                logger.warning('Optimization problem status failure')
+                logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
@@ -486,11 +487,11 @@ class ASGL:
                     except (ValueError, cvxpy.error.SolverError):
                         continue
             if problem.status in ["infeasible", "unbounded"]:
-                logger.warning('Optimization problem status failure')
+                logging.warning('Optimization problem status failure')
             beta_sol = beta_var.value
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
-        logger.debug('Function finished without errors')
+        logging.debug('Function finished without errors')
         return beta_sol_list
 
     def agl(self, x, y, group_index, param):
@@ -546,7 +547,7 @@ class ASGL:
                     except (ValueError, cvxpy.error.SolverError):
                         continue
             if problem.status in ["infeasible", "unbounded"]:
-                logger.warning('Optimization problem status failure')
+                logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
@@ -611,7 +612,7 @@ class ASGL:
                     except (ValueError, cvxpy.error.SolverError):
                         continue
             if problem.status in ["infeasible", "unbounded"]:
-                logger.warning('Optimization problem status failure')
+                logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
@@ -695,7 +696,7 @@ class ASGL:
         if self.intercept:
             x_new = np.c_[np.ones(x_new.shape[0]), x_new]
         if x_new.shape[1] != len(self.coef_[0]):
-            logger.error('Model dimension and new data dimension does not match')
+            logging.error('Model dimension and new data dimension does not match')
             raise ValueError('Model dimension and new data dimension does not match')
         # Store predictions in a list
         prediction_list = []
@@ -717,7 +718,7 @@ class ASGL:
         """
         # Run the input_checker to verify that the inputs have the correct format
         if self.__input_checker() is False:
-            logger.error('incorrect input parameters')
+            logging.error('incorrect input parameters')
             raise ValueError('incorrect input parameters')
         if self.penalization is None:
             # See meaning of each element in the "else" result statement.
@@ -755,7 +756,7 @@ class ASGL:
         if param_index > n_models:
             string = f'param_index should be smaller or equal than the number of models solved. n_models={n_models}, ' \
                      f'param_index={param_index}'
-            logger.error(string)
+            logging.error(string)
             raise ValueError(string)
         # If penalization is None, all parameters are set to None
         if self.penalization is None:
@@ -822,7 +823,7 @@ def error_calculator(y_true, prediction_list, error_type="MSE", tau=None):
     if error_type not in valid_error_types:
         raise ValueError(f'invalid error type. Valid error types are {error_dict.keys()}')
     if y_true.shape[0] != len(prediction_list[0]):
-        logger.error('Dimension of test data does not match dimension of prediction')
+        logging.error('Dimension of test data does not match dimension of prediction')
         raise ValueError('Dimension of test data does not match dimension of prediction')
     # For each prediction, store the error associated to that prediction in a list
     error_list = []
