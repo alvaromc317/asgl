@@ -66,7 +66,7 @@ print(f'We are considering a grid of {num_models} models, optimized based on {k_
 error = np.mean(error, axis=1)
 ```       
 
-For a full review on the capabilities of these package we suggest accessing the  user_guide notebook provided in the [GitHub repository](https://github.com/alvaromc317/asgl)
+For a full review on the capabilities of these package we suggest accessing the  user_guide notebook provided in the [GitHub repository](https://github.com/alvaromc317/asgl). Additionally, you can find more [here](https://towardsdatascience.com/sparse-group-lasso-in-python-255e379ab892) and [here](https://towardsdatascience.com/an-adaptive-lasso-63afca54b80d).
 
 ### Citing
 ___

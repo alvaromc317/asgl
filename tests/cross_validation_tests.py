@@ -18,7 +18,7 @@ def equal_array(array0, array1, tol=1e-6):
         f'Shapes do not match. Received: {n0} and {n1}'
     else:
         dif = array0 - array1
-        if np.mean(dif) > tol:
+        if np.abs(np.mean(dif)) > tol:
             f'Arrays are not equal. Mean difference is {np.mean(dif)}'
 
 
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     # Adaptive group lasso
     cross_validation_class = asgl.CV(model='qr', penalization='agl', lambda1=[0.01, 0.1, 1, 10], tau=0.5,
                                      parallel=True, num_cores=9, weight_technique='pca_pct',
-                                     lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2],
+                                     gl_power_weight=[0.8, 1, 1.2],
                                      variability_pct=0.7, nfolds=3, error_type='QRE', random_state=99)
     cross_validation_class.cross_validation(x, y, group_index)
 
@@ -96,5 +96,12 @@ if __name__ == '__main__':
                                      variability_pct=0.7, nfolds=3, error_type='QRE', random_state=99, spca_alpha=1e-1,
                                      spca_ridge_alpha=1e-5)
     cross_validation_class.cross_validation(x, y, group_index)
+
+    cross_validation_class = asgl.TVT(model='qr', penalization='asgl', lambda1=[0.01, 0.1, 1, 10], tau=0.5,
+                                      alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=9, weight_technique='lasso',
+                                      lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2],
+                                      error_type='QRE', random_state=99, train_pct=0.6,
+                                      validate_pct=0.2)
+    cross_validation_class.train_validate_test(x, y, group_index)
 
     print(f'Finished with no error. Execution time: {time.time() - start_time}')

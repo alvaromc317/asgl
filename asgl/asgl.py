@@ -54,12 +54,14 @@ class ASGL:
         # Define solver param as a list of the three default solvers for CVXPY
         if solver is None:
             self.solver = ['ECOS', 'OSQP', 'SCS']
-        else:
+        elif not isinstance(solver, list):
             self.solver = [solver]
+        else:
+            self.solver = solver
 
     # Model checker related functions #################################################################################
 
-    def __model_checker(self):
+    def _model_checker(self):
         """
         Checks if the input model is one of the valid options:
          - lm for linear models
@@ -71,7 +73,7 @@ class ASGL:
             logging.error(f'{self.model} is not a valid model. Valid models are {self.valid_models}')
             return False
 
-    def __penalization_checker(self):
+    def _penalization_checker(self):
         """
         Checks if the penalization is one of the valid options:
          - lasso for lasso penalization
@@ -88,7 +90,7 @@ class ASGL:
                           f'Valid penalizations are {self.valid_penalizations} or None')
             return False
 
-    def __dtype_checker(self):
+    def _dtype_checker(self):
         """
         Checks if some of the inputs are in the correct format
         """
@@ -101,16 +103,16 @@ class ASGL:
         response = response_1 and response_2
         return response
 
-    def __input_checker(self):
+    def _input_checker(self):
         """
         Checks that every input parameter for the model solvers has the expected format
         """
-        response_list = [self.__model_checker(), self.__penalization_checker(), self.__dtype_checker()]
+        response_list = [self._model_checker(), self._penalization_checker(), self._dtype_checker()]
         return False not in response_list
 
     # Preprocessing related functions #################################################################################
 
-    def __preprocessing_lambda(self):
+    def _preprocessing_lambda(self):
         """
         Processes the input lambda1 parameter and transforms it as required by the solver package functions
         """
@@ -124,7 +126,7 @@ class ASGL:
             n_lambda = len(lambda_vector)
         return n_lambda, lambda_vector
 
-    def __preprocessing_alpha(self):
+    def _preprocessing_alpha(self):
         """
         Processes the input alpha parameter from sgl and asgl penalizations and transforms it as required by the solver
         package functions
@@ -140,7 +142,7 @@ class ASGL:
                 n_alpha = len(alpha_vector)
         return n_alpha, alpha_vector
 
-    def __preprocessing_weights(self, weights):
+    def _preprocessing_weights(self, weights):
         """
         Converts l_weights into a list of lists. Each list inside l_weights defines a set of weights for a model
         """
@@ -166,7 +168,7 @@ class ASGL:
                 n_weights = len(weights_list)
         return n_weights, weights_list
 
-    def __preprocessing_itertools_param(self, lambda_vector, alpha_vector, lasso_weights_list, gl_weights_list):
+    def _preprocessing_itertools_param(self, lambda_vector, alpha_vector, lasso_weights_list, gl_weights_list):
         """
         Receives as input the results from preprocessing_lambda, preprocessing_alpha and preprocessing_weights
         Outputs an iterable list of parameter values "param"
@@ -187,13 +189,13 @@ class ASGL:
         param = list(param)
         return param
 
-    def __preprocessing(self):
+    def _preprocessing(self):
         """
         Receives all the parameters of the models and creates tuples of the parameters to be executed in the penalized
         model solvers
         """
         # Run the input_checker to verify that the inputs have the correct format
-        if self.__input_checker() is False:
+        if self._input_checker() is False:
             logging.error('incorrect input parameters')
             raise ValueError('incorrect input parameters')
         # Defines param as None for the unpenalized model
@@ -201,17 +203,17 @@ class ASGL:
             param = None
         else:
             # Reformat parameter vectors
-            n_lambda, lambda_vector = self.__preprocessing_lambda()
-            n_alpha, alpha_vector = self.__preprocessing_alpha()
-            n_lasso_weights, lasso_weights_list = self.__preprocessing_weights(self.lasso_weights)
-            n_gl_weights, gl_weights_list = self.__preprocessing_weights(self.gl_weights)
-            param = self.__preprocessing_itertools_param(lambda_vector, alpha_vector, lasso_weights_list,
-                                                         gl_weights_list)
+            n_lambda, lambda_vector = self._preprocessing_lambda()
+            n_alpha, alpha_vector = self._preprocessing_alpha()
+            n_lasso_weights, lasso_weights_list = self._preprocessing_weights(self.lasso_weights)
+            n_gl_weights, gl_weights_list = self._preprocessing_weights(self.gl_weights)
+            param = self._preprocessing_itertools_param(lambda_vector, alpha_vector, lasso_weights_list,
+                                                        gl_weights_list)
         return param
 
     # CVXPY SOLVER RELATED OPTIONS ###################################################################################
 
-    def __cvxpy_solver_options(self, solver):
+    def _cvxpy_solver_options(self, solver):
         if solver == 'ECOS':
             solver_dict = dict(solver=solver,
                                max_iters=self.max_iters)
@@ -224,13 +226,13 @@ class ASGL:
 
     # SOLVERS #########################################################################################################
 
-    def __quantile_function(self, x):
+    def _quantile_function(self, x):
         """
         Quantile function required for quantile regression models.
         """
         return 0.5 * cvxpy.abs(x) + (self.tau - 0.5) * x
 
-    def __num_beta_var_from_group_index(self, group_index):
+    def _num_beta_var_from_group_index(self, group_index):
         """
         Internal function used in group based penalizations (gl, sgl, asgl, asgl_lasso, asgl_gl)
         """
@@ -254,7 +256,7 @@ class ASGL:
         if self.model == 'lm':
             objective_function = (1.0 / n) * cvxpy.sum_squares(y - x @ beta_var)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - x @ beta_var)))
+            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - x @ beta_var)))
         objective = cvxpy.Minimize(objective_function)
         problem = cvxpy.Problem(objective)
         # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a ValueError
@@ -263,7 +265,7 @@ class ASGL:
             problem.solve(warm_start=True)
         except (ValueError, cvxpy.error.SolverError):
             for elt in self.solver:
-                solver_dict = self.__cvxpy_solver_options(solver=elt)
+                solver_dict = self._cvxpy_solver_options(solver=elt)
                 try:
                     problem.solve(**solver_dict)
                     if 'optimal' in problem.status:
@@ -296,7 +298,7 @@ class ASGL:
         if self.model == 'lm':
             objective_function = (1.0 / n) * cvxpy.sum_squares(y - x @ beta_var)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - x @ beta_var)))
+            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - x @ beta_var)))
         objective = cvxpy.Minimize(objective_function + lasso_penalization)
         problem = cvxpy.Problem(objective)
         beta_sol_list = []
@@ -309,7 +311,7 @@ class ASGL:
                 problem.solve(warm_start=True)
             except (ValueError, cvxpy.error.SolverError):
                 for elt in self.solver:
-                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
                         if 'optimal' in problem.status:
@@ -331,7 +333,7 @@ class ASGL:
         n = x.shape[0]
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
         unique_group_index = np.unique(group_index)
-        group_sizes, beta_var = self.__num_beta_var_from_group_index(group_index)
+        group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
         group_lasso_penalization = 0
@@ -355,7 +357,7 @@ class ASGL:
         if self.model == 'lm':
             objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - model_prediction)))
+            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
         lambda_param = cvxpy.Parameter(nonneg=True)
         objective = cvxpy.Minimize(objective_function + (lambda_param * group_lasso_penalization))
         problem = cvxpy.Problem(objective)
@@ -369,7 +371,7 @@ class ASGL:
                 problem.solve(warm_start=True)
             except (ValueError, cvxpy.error.SolverError):
                 for elt in self.solver:
-                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
                         if 'optimal' in problem.status:
@@ -390,7 +392,7 @@ class ASGL:
         n = x.shape[0]
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
         unique_group_index = np.unique(group_index)
-        group_sizes, beta_var = self.__num_beta_var_from_group_index(group_index)
+        group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
         lasso_penalization = 0
@@ -414,7 +416,7 @@ class ASGL:
         if self.model == 'lm':
             objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - model_prediction)))
+            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
         lasso_param = cvxpy.Parameter(nonneg=True)
         grp_lasso_param = cvxpy.Parameter(nonneg=True)
         objective = cvxpy.Minimize(objective_function +
@@ -432,7 +434,7 @@ class ASGL:
                 problem.solve(warm_start=True)
             except (ValueError, cvxpy.error.SolverError):
                 for elt in self.solver:
-                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
                         if 'optimal' in problem.status:
@@ -466,7 +468,7 @@ class ASGL:
         if self.model == 'lm':
             objective_function = (1.0 / n) * cvxpy.sum_squares(y - x @ beta_var)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - x @ beta_var)))
+            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - x @ beta_var)))
         objective = cvxpy.Minimize(objective_function + lasso_penalization)
         problem = cvxpy.Problem(objective)
         beta_sol_list = []
@@ -479,7 +481,7 @@ class ASGL:
                 problem.solve(warm_start=True)
             except (ValueError, cvxpy.error.SolverError):
                 for elt in self.solver:
-                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
                         if 'optimal' in problem.status:
@@ -501,7 +503,7 @@ class ASGL:
         n = x.shape[0]
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
         unique_group_index = np.unique(group_index)
-        group_sizes, beta_var = self.__num_beta_var_from_group_index(group_index)
+        group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
         group_lasso_penalization = 0
@@ -526,7 +528,7 @@ class ASGL:
         if self.model == 'lm':
             objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - model_prediction)))
+            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
         objective = cvxpy.Minimize(objective_function + group_lasso_penalization)
         problem = cvxpy.Problem(objective)
         beta_sol_list = []
@@ -539,7 +541,7 @@ class ASGL:
                 problem.solve(warm_start=True)
             except (ValueError, cvxpy.error.SolverError):
                 for elt in self.solver:
-                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
                         if 'optimal' in problem.status:
@@ -560,7 +562,7 @@ class ASGL:
         n, m = x.shape
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
         unique_group_index = np.unique(group_index)
-        group_sizes, beta_var = self.__num_beta_var_from_group_index(group_index)
+        group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
         alasso_penalization = 0
@@ -588,7 +590,7 @@ class ASGL:
         if self.model == 'lm':
             objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self.__quantile_function(x=(y - model_prediction)))
+            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
         objective = cvxpy.Minimize(objective_function +
                                    a_group_lasso_penalization +
                                    alasso_penalization)
@@ -604,7 +606,7 @@ class ASGL:
                 problem.solve(warm_start=True)
             except (ValueError, cvxpy.error.SolverError):
                 for elt in self.solver:
-                    solver_dict = self.__cvxpy_solver_options(solver=elt)
+                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
                         if 'optimal' in problem.status:
@@ -620,7 +622,7 @@ class ASGL:
 
     # PARALLEL CODE ###################################################################################################
 
-    def parallel_execution(self, x, y, param, group_index=None):
+    def _parallel_execution(self, x, y, param, group_index=None):
         """
         Parallel implementation of the solvers
         """
@@ -644,9 +646,9 @@ class ASGL:
         # Solve problem in parallel
         pool = mp.Pool(num_chunks)
         if self.penalization in ['lasso', 'alasso']:
-            global_results = pool.map(functools.partial(getattr(self, self.__get_solver_names()), x, y), chunks)
+            global_results = pool.map(functools.partial(getattr(self, self._get_solver_names()), x, y), chunks)
         else:
-            global_results = pool.map(functools.partial(getattr(self, self.__get_solver_names()), x, y, group_index),
+            global_results = pool.map(functools.partial(getattr(self, self._get_solver_names()), x, y, group_index),
                                       chunks)
         pool.close()
         pool.join()
@@ -662,7 +664,7 @@ class ASGL:
 
     # FIT METHOD ######################################################################################################
 
-    def __get_solver_names(self):
+    def _get_solver_names(self):
         if 'asgl' in self.penalization:
             return 'asgl'
         else:
@@ -673,18 +675,18 @@ class ASGL:
         Main function of the module. Given a model, penalization and parameter values specified in the class definition,
         this function solves the model and produces the regression coefficients
         """
-        param = self.__preprocessing()
+        param = self._preprocessing()
         if self.penalization is None:
             self.coef_ = self.unpenalized_solver(x=x, y=y)
         else:
             if self.parallel is False:
                 if self.penalization in ['lasso', 'alasso']:
-                    self.coef_ = getattr(self, self.__get_solver_names())(x=x, y=y, param=param)
+                    self.coef_ = getattr(self, self._get_solver_names())(x=x, y=y, param=param)
                 else:
-                    self.coef_ = getattr(self, self.__get_solver_names())(x=x, y=y, param=param,
-                                                                          group_index=group_index)
+                    self.coef_ = getattr(self, self._get_solver_names())(x=x, y=y, param=param,
+                                                                         group_index=group_index)
             else:
-                self.coef_ = self.parallel_execution(x=x, y=y, param=param, group_index=group_index)
+                self.coef_ = self._parallel_execution(x=x, y=y, param=param, group_index=group_index)
 
     # PREDICTION METHOD ###############################################################################################
 
@@ -717,17 +719,21 @@ class ASGL:
         - n_gl_weights: number of different weights for the lasso part of the asgl (or asgl_gl) penalizations
         """
         # Run the input_checker to verify that the inputs have the correct format
-        if self.__input_checker() is False:
+        if self._input_checker() is False:
             logging.error('incorrect input parameters')
             raise ValueError('incorrect input parameters')
         if self.penalization is None:
             # See meaning of each element in the "else" result statement.
-            result = [1, None, None, None, None]
+            result = dict(num_models=1,
+                          n_lambda=None,
+                          n_alpha=None,
+                          n_lasso_weights=None,
+                          n_gl_weights=None)
         else:
-            n_lambda, drop = self.__preprocessing_lambda()
-            n_alpha, drop = self.__preprocessing_alpha()
-            n_lasso_weights, drop = self.__preprocessing_weights(self.lasso_weights)
-            n_gl_weights, drop = self.__preprocessing_weights(self.gl_weights)
+            n_lambda, drop = self._preprocessing_lambda()
+            n_alpha, drop = self._preprocessing_alpha()
+            n_lasso_weights, drop = self._preprocessing_weights(self.lasso_weights)
+            n_gl_weights, drop = self._preprocessing_weights(self.gl_weights)
             list_param = [n_lambda, n_alpha, n_lasso_weights, n_gl_weights]
             list_param_no_none = [elt for elt in list_param if elt is not None]
             num_models = np.prod(list_param_no_none)
@@ -740,7 +746,7 @@ class ASGL:
 
     def _retrieve_parameters_idx(self, param_index):
         """
-        Given an index for the param iterable output from __preprocessing function, this function returns a tupple
+        Given an index for the param iterable output from _preprocessing function, this function returns a tupple
         with the index of the value of each parameter.
         Example: Solving an adaptive sparse group lasso model with 5 values for lambda1, 4 values for alpha,
                  3 possible lasso weights and 3 possible group lasso weights yields in a grid search on
@@ -802,7 +808,7 @@ class ASGL:
 
 # ERROR CALCULATOR METHOD #############################################################################################
 
-def __quantile_function(y_true, y_pred, tau):
+def _quantile_function(y_true, y_pred, tau):
     """
     Quantile function required for error computation
     """
@@ -817,7 +823,7 @@ def error_calculator(y_true, prediction_list, error_type="MSE", tau=None):
         MSE=mean_squared_error,
         MAE=mean_absolute_error,
         MDAE=median_absolute_error,
-        QRE=__quantile_function)
+        QRE=_quantile_function)
     valid_error_types = error_dict.keys()
     # Check that the error_type is a valid error type considered
     if error_type not in valid_error_types:

@@ -49,14 +49,14 @@ class WEIGHTS:
 
     # PREPROCESSING ###################################################################################################
 
-    def __preprocessing(self, power_weight):
+    def _preprocessing(self, power_weight):
         if isinstance(power_weight, (np.int, np.float)):
             power_weight = [power_weight]
         return power_weight
 
     # WEIGHT TECHNIQUES ###############################################################################################
 
-    def __pca_1(self, x, y):
+    def _pca_1(self, x, y):
         """
         Computes the adpative weights based on the first principal component
         """
@@ -65,7 +65,7 @@ class WEIGHTS:
         tmp_weight = np.abs(pca.components_).flatten()
         return tmp_weight
 
-    def __pca_pct(self, x, y):
+    def _pca_pct(self, x, y):
         """
         Computes the adpative weights based on principal component analysis
         """
@@ -87,7 +87,7 @@ class WEIGHTS:
         tmp_weight = np.abs(np.dot(p, beta_qr)).flatten()
         return tmp_weight
 
-    def __pls_1(self, x, y):
+    def _pls_1(self, x, y):
         """
         Computes the adpative weights based on the first partial least squares component
         """
@@ -97,7 +97,7 @@ class WEIGHTS:
         tmp_weight = np.abs(pls.x_rotations_).flatten()
         return tmp_weight
 
-    def __pls_pct(self, x, y):
+    def _pls_pct(self, x, y):
         """
         Computes the adpative weights based on partial least squares
         """
@@ -114,7 +114,7 @@ class WEIGHTS:
         tmp_weight = np.abs(np.asarray(pls.coef_).flatten())
         return tmp_weight
 
-    def __unpenalized(self, x, y):
+    def _unpenalized(self, x, y):
         """
         Only for low dimensional frameworks. Computes the adpative weights based on unpenalized regression model
         """
@@ -123,7 +123,7 @@ class WEIGHTS:
         tmp_weight = np.abs(unpenalized_model.coef_[0][1:])  # Remove intercept
         return tmp_weight
 
-    def __sparse_pca(self, x, y):
+    def _sparse_pca(self, x, y):
         """
         Computes the adpative weights based on sparse principal component analysis.
         """
@@ -151,23 +151,23 @@ class WEIGHTS:
         tmp_weight = np.abs(np.dot(p[:, 0:n_comp], beta_qr)).flatten()
         return tmp_weight
 
-    def __lasso(self, x, y):
+    def _lasso(self, x, y):
         lasso_model = ASGL(model=self.model, penalization='lasso', lambda1=self.lambda1_weights, intercept=True,
                            tau=self.tau)
         lasso_model.fit(x=x, y=y)
         tmp_weight = np.abs(lasso_model.coef_[0][1:])  # Remove intercept
         return tmp_weight
 
-    def __weight_techniques_names(self):
-        return '_WEIGHTS__' + self.weight_technique
+    def _weight_techniques_names(self):
+        return '_' + self.weight_technique
 
-    def __lasso_weights_calculation(self, tmp_weight):
-        self.lasso_power_weight = self.__preprocessing(self.lasso_power_weight)
+    def _lasso_weights_calculation(self, tmp_weight):
+        self.lasso_power_weight = self._preprocessing(self.lasso_power_weight)
         lasso_weights = [1 / (tmp_weight ** elt + self.weight_tol) for elt in self.lasso_power_weight]
         return lasso_weights
 
-    def __gl_weights_calculation(self, tmp_weight, group_index):
-        self.gl_power_weight = self.__preprocessing(self.gl_power_weight)
+    def _gl_weights_calculation(self, tmp_weight, group_index):
+        self.gl_power_weight = self._preprocessing(self.gl_power_weight)
         unique_index = np.unique(group_index)
         gl_weights = []
         for glpw in self.gl_power_weight:
@@ -182,22 +182,22 @@ class WEIGHTS:
         Main function of the module, given the input specified in the class definition, this function computes
         the specified weights.
         """
-        tmp_weight = getattr(self, self.__weight_techniques_names())(x=x, y=y)
+        tmp_weight = getattr(self, self._weight_techniques_names())(x=x, y=y)
         if self.penalization == 'alasso':
-            lasso_weights = self.__lasso_weights_calculation(tmp_weight)
+            lasso_weights = self._lasso_weights_calculation(tmp_weight)
             gl_weights = None
         elif self.penalization == 'agl':
             lasso_weights = None
-            gl_weights = self.__gl_weights_calculation(tmp_weight, group_index)
+            gl_weights = self._gl_weights_calculation(tmp_weight, group_index)
         elif self.penalization == 'asgl_lasso':
-            lasso_weights = self.__lasso_weights_calculation(tmp_weight)
+            lasso_weights = self._lasso_weights_calculation(tmp_weight)
             gl_weights = np.ones(len(np.unique(group_index)))
         elif self.penalization == 'asgl_gl':
             lasso_weights = np.ones(x.shape[1])
-            gl_weights = self.__gl_weights_calculation(tmp_weight, group_index)
+            gl_weights = self._gl_weights_calculation(tmp_weight, group_index)
         elif self.penalization == 'asgl':
-            lasso_weights = self.__lasso_weights_calculation(tmp_weight)
-            gl_weights = self.__gl_weights_calculation(tmp_weight, group_index)
+            lasso_weights = self._lasso_weights_calculation(tmp_weight)
+            gl_weights = self._gl_weights_calculation(tmp_weight, group_index)
         else:
             lasso_weights = None
             gl_weights = None

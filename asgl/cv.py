@@ -82,7 +82,7 @@ class CV(CvGeneralClass):
 
     # SPLIT DATA METHODS ##############################################################################################
 
-    def __cross_validation_split(self, nrows):
+    def _cross_validation_split(self, nrows):
         # Randomly generate index
         data_index = np.random.choice(nrows, nrows, replace=False)
         # Split data into k folds
@@ -93,7 +93,7 @@ class CV(CvGeneralClass):
 
     # CROSS VALIDATION ################################################################################################
 
-    def __one_step_cross_validation(self, x, y, group_index=None, zip_index=None):
+    def _one_step_cross_validation(self, x, y, group_index=None, zip_index=None):
         # Given a zip (one element from the cross_validation_split function) retrieve train / test splits
         train_index, test_index = zip_index
         x_train, x_test = (x[train_index, :], x[test_index, :])
@@ -109,9 +109,9 @@ class CV(CvGeneralClass):
         # Define random state if required
         if self.random_state is not None:
             np.random.seed(self.random_state)
-        cv_index = self.__cross_validation_split(nrows=x.shape[0])
+        cv_index = self._cross_validation_split(nrows=x.shape[0])
         for zip_index in cv_index:
-            error = self.__one_step_cross_validation(x, y, group_index=group_index, zip_index=zip_index)
+            error = self._one_step_cross_validation(x, y, group_index=group_index, zip_index=zip_index)
             error_list.append(error)
         return np.array(error_list).T  # Each row is a model, each column is a k fold split
 
@@ -135,7 +135,12 @@ class TVT(CvGeneralClass):
 
     # TRAIN VALIDATE TEST SPLIT #######################################################################################
 
-    def __train_validate_test_split(self, nrows):
+    def _train_validate_test_split(self, nrows):
+        """
+        Splits data into train validate and test. Takes into account the random state for consistent repetitions
+        :param nrows: Number of observations
+        :return:  A three items object including train index, validate index and test index
+        """
         # Randomly generate index
         data_index = np.random.choice(nrows, nrows, replace=False)
         if self.train_size is None:
@@ -148,12 +153,20 @@ class TVT(CvGeneralClass):
 
     # TRAIN VALIDATE TEST #############################################################################################
 
-    def __train_validate(self, x, y, group_index=None):
+    def _train_validate(self, x, y, group_index=None):
+        """
+        Split the data into train validate and test. Fit an adaptive lasso based model on the train split. Obtain
+        predictions and compute error using validation set.
+        :param x: data matrix x
+        :param y: response vector y
+        :param group_index: group index of predictors in data matrix x
+        :return: Validate error and test index
+        """
         # Define random state if required
         if self.random_state is not None:
             np.random.seed(self.random_state)
         # Split data
-        split_index = self.__train_validate_test_split(nrows=x.shape[0])
+        split_index = self._train_validate_test_split(nrows=x.shape[0])
         x_train, x_validate, drop = [x[idx, :] for idx in split_index]
         y_train, y_validate, drop = [y[idx] for idx in split_index]
         test_index = split_index[2]
@@ -165,7 +178,16 @@ class TVT(CvGeneralClass):
                                                error_type=self.error_type, tau=self.tau)
         return validate_error, test_index
 
-    def __tv_test(self, x, y, validate_error, test_index):
+    def _tv_test(self, x, y, validate_error, test_index):
+        """
+        Given a validate error and a test index obtains the final test_error and stores the optimal parameter values and
+        optimal betas
+        :param x: data matrix x
+        :param y: response vector y
+        :param validate_error: Validation error computed in __train_validate()
+        :param test_index: Test index
+        :return: optimal_betas, optimal_parameters, test_error
+        """
         # Select the minimum error
         minimum_error_idx = np.argmin(validate_error)
         # Select the parameters index associated to mininum error values
@@ -174,12 +196,18 @@ class TVT(CvGeneralClass):
         optimal_betas = self.coef_[minimum_error_idx]
         test_prediction = [self.predict(x_new=x[test_index, :])[minimum_error_idx]]
         test_error = asgl.error_calculator(y_true=y[test_index], prediction_list=test_prediction,
-                                           error_type=self.error_type, tau=self.tau)
+                                           error_type=self.error_type, tau=self.tau)[0]
         return optimal_betas, optimal_parameters, test_error
 
     def train_validate_test(self, x, y, group_index=None):
-        validate_error, test_index = self.__train_validate(x, y, group_index)
-        optimal_betas, optimal_parameters, test_error = self.__tv_test(x, y, validate_error, test_index)
+        """
+        Runs functions __train_validate() and __tv_test(). Stores results in a dictionary
+        :param x: data matrix x
+        :param y: response vector y
+        :param group_index: group index of predictors in data matrix x
+        """
+        validate_error, test_index = self._train_validate(x, y, group_index)
+        optimal_betas, optimal_parameters, test_error = self._tv_test(x, y, validate_error, test_index)
         result = dict(
             optimal_betas=optimal_betas,
             optimal_parameters=optimal_parameters,
@@ -190,6 +218,9 @@ class TVT(CvGeneralClass):
 # TRAIN TEST SPLIT ###################################################################################################
 
 def train_test_split(nrows, train_size=None, train_pct=0.7, random_state=None):
+    """
+    Splits data into train / test. Takes into account random_state for future consistency.
+    """
     # Define random state if required
     if random_state is not None:
         np.random.seed(random_state)
