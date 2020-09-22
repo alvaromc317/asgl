@@ -1,9 +1,0 @@
-{
-    "logger": {
-        "loggingLevel": "INFO",
-        "stream_handler_logging_level": "DEBUG",
-        "file_handler_logging_level": "DEBUG",
-        "file_name": "output_log.log",
-        "logger_output": "stream"},
-    "max_cores": 16
-}
