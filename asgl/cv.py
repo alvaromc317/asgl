@@ -2,7 +2,7 @@ import logging
 import sys
 
 import numpy as np
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, GroupKFold
 
 from . import asgl
 from . import weights
@@ -82,11 +82,21 @@ class CV(CvGeneralClass):
 
     # SPLIT DATA METHODS ##############################################################################################
 
-    def _cross_validation_split(self, nrows):
-        # Randomly generate index
-        data_index = np.random.choice(nrows, nrows, replace=False)
-        # Split data into k folds
-        k_folds = KFold(n_splits=self.nfolds).split(data_index)
+    def _cross_validation_split(self, nrows, split_index=None):
+        """
+        Split data based on kfold or group kfold cross validation
+        :param nrows: number of rows in the dataset
+        :param split_index: Group structure of observations used in GroupKfold. 
+                            same length as nrows
+        """
+        if split_index is None:
+            # Randomly generate index
+            data_index = np.random.choice(nrows, nrows, replace=False)
+            # Split data into k folds
+            k_folds = KFold(n_splits=self.nfolds).split(data_index)
+        else:
+            data_index = np.arange(0, nrows)
+            k_folds = GroupKFold(n_splits=self.nfolds).split(X=data_index, groups=split_index)
         # List containing zips of (train, test) indices
         response = [(data_index[train], data_index[validate]) for train, validate in list(k_folds)]
         return response
@@ -104,12 +114,12 @@ class CV(CvGeneralClass):
                                       tau=self.tau)
         return error
 
-    def cross_validation(self, x, y, group_index=None):
+    def cross_validation(self, x, y, group_index=None, split_index=None):
         error_list = []
         # Define random state if required
         if self.random_state is not None:
             np.random.seed(self.random_state)
-        cv_index = self._cross_validation_split(nrows=x.shape[0])
+        cv_index = self._cross_validation_split(nrows=x.shape[0], split_index=split_index)
         for zip_index in cv_index:
             error = self._one_step_cross_validation(x, y, group_index=group_index, zip_index=zip_index)
             error_list.append(error)

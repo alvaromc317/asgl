@@ -676,6 +676,7 @@ class ASGL:
         this function solves the model and produces the regression coefficients
         """
         param = self._preprocessing()
+        group_index = np.asarray(group_index).astype(int)
         if self.penalization is None:
             self.coef_ = self.unpenalized_solver(x=x, y=y)
         else:

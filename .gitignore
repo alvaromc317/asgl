@@ -132,3 +132,4 @@ dmypy.json
 .idea/
 .ipynb_checkpoints/
 .asgl/__pycache__
+.vscode/
