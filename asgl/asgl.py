@@ -13,7 +13,7 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s -
 
 class ASGL:
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500):
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='default', max_iters=500):
         """
         Parameters:
             model: model to be fit (accepts 'lm' or 'qr')
@@ -28,7 +28,7 @@ class ASGL:
             gl_weights: group lasso weights in adaptive penalizations
             parallel: boolean, whether to execute the code in parallel or sequentially
             num_cores: if parallel is set to true, the number of cores to use in the execution. Default is (max - 1)
-            solver: solver to be used by CVXPY. Default uses optimal alternative depending on the problem
+            solver: solver to be used by CVXPY. default uses optimal alternative depending on the problem
             max_iters: CVXPY parameter. Default is 500
 
         Returns:
@@ -51,13 +51,9 @@ class ASGL:
         self.num_cores = num_cores
         self.max_iters = max_iters
         self.coef_ = None
-        # Define solver param as a list of the three default solvers for CVXPY
-        if solver is None:
-            self.solver = ['ECOS', 'OSQP', 'SCS']
-        elif not isinstance(solver, list):
-            self.solver = [solver]
-        else:
-            self.solver = solver
+        # CVXPY solver parameters
+        self.solver_stats = None
+        self.solver = solver
 
     # Model checker related functions #################################################################################
 
@@ -259,12 +255,20 @@ class ASGL:
             objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - x @ beta_var)))
         objective = cvxpy.Minimize(objective_function)
         problem = cvxpy.Problem(objective)
-        # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a ValueError
-        # arises, try the solvers provided as input to the method.
+        # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
+        # If other name is provided, try the name provided
+        # If these options fail, try default ECOS, OSQP, SCS options
         try:
-            problem.solve(warm_start=True)
+            if self.solver == 'default':
+                problem.solve(warm_start=True)
+            else:
+                solver_dict = self._cvxpy_solver_options(solver=self.solver)
+                problem.solve(**solver_dict)
         except (ValueError, cvxpy.error.SolverError):
-            for elt in self.solver:
+            logging.warning('Default solver failed. Using alternative options. Check solver and solver_stats for more '
+                            'details')
+            solver = ['ECOS', 'OSQP', 'SCS']
+            for elt in solver:
                 solver_dict = self._cvxpy_solver_options(solver=elt)
                 try:
                     problem.solve(**solver_dict)
@@ -272,6 +276,7 @@ class ASGL:
                         break
                 except (ValueError, cvxpy.error.SolverError):
                     continue
+        self.solver_stats = problem.solver_stats
         if problem.status in ["infeasible", "unbounded"]:
             logging.warning('Optimization problem status failure')
         beta_sol = beta_var.value
@@ -305,12 +310,21 @@ class ASGL:
         # Solve the problem iteratively for each parameter value
         for lam in param:
             lambda_param.value = lam
-            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
-            # ValueError arises, try the solvers provided as input to the method.
+            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
+            # If other name is provided, try the name provided
+            # If these options fail, try default ECOS, OSQP, SCS options
             try:
-                problem.solve(warm_start=True)
+                if self.solver == 'default':
+                    problem.solve(warm_start=True)
+                else:
+                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
+                    problem.solve(**solver_dict)
             except (ValueError, cvxpy.error.SolverError):
-                for elt in self.solver:
+                logging.warning(
+                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
+                    'details')
+                solver = ['ECOS', 'OSQP', 'SCS']
+                for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
@@ -318,6 +332,7 @@ class ASGL:
                             break
                     except (ValueError, cvxpy.error.SolverError):
                         continue
+            self.solver_stats = problem.solver_stats
             if problem.status in ["infeasible", "unbounded"]:
                 logging.warning('Optimization problem status failure')
             beta_sol = beta_var.value
@@ -332,6 +347,7 @@ class ASGL:
         """
         n = x.shape[0]
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
+        group_index = np.asarray(group_index).astype(int)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
@@ -365,12 +381,21 @@ class ASGL:
         # Solve the problem iteratively for each parameter value
         for lam in param:
             lambda_param.value = lam
-            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
-            # ValueError arises, try the solvers provided as input to the method.
+            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
+            # If other name is provided, try the name provided
+            # If these options fail, try default ECOS, OSQP, SCS options
             try:
-                problem.solve(warm_start=True)
+                if self.solver == 'default':
+                    problem.solve(warm_start=True)
+                else:
+                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
+                    problem.solve(**solver_dict)
             except (ValueError, cvxpy.error.SolverError):
-                for elt in self.solver:
+                logging.warning(
+                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
+                    'details')
+                solver = ['ECOS', 'OSQP', 'SCS']
+                for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
@@ -378,6 +403,7 @@ class ASGL:
                             break
                     except (ValueError, cvxpy.error.SolverError):
                         continue
+            self.solver_stats = problem.solver_stats
             if problem.status in ["infeasible", "unbounded"]:
                 logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
@@ -391,6 +417,7 @@ class ASGL:
         """
         n = x.shape[0]
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
+        group_index = np.asarray(group_index).astype(int)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
@@ -428,12 +455,21 @@ class ASGL:
         for lam, al in param:
             lasso_param.value = lam * al
             grp_lasso_param.value = lam * (1 - al)
-            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
-            # ValueError arises, try the solvers provided as input to the method.
+            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
+            # If other name is provided, try the name provided
+            # If these options fail, try default ECOS, OSQP, SCS options
             try:
-                problem.solve(warm_start=True)
+                if self.solver == 'default':
+                    problem.solve(warm_start=True)
+                else:
+                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
+                    problem.solve(**solver_dict)
             except (ValueError, cvxpy.error.SolverError):
-                for elt in self.solver:
+                logging.warning(
+                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
+                    'details')
+                solver = ['ECOS', 'OSQP', 'SCS']
+                for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
@@ -441,6 +477,7 @@ class ASGL:
                             break
                     except (ValueError, cvxpy.error.SolverError):
                         continue
+            self.solver_stats = problem.solver_stats
             if problem.status in ["infeasible", "unbounded"]:
                 logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
@@ -475,12 +512,21 @@ class ASGL:
         # Solve the problem iteratively for each parameter value
         for lam, lw in param:
             l_weights_param.value = lam * lw
-            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
-            # ValueError arises, try the solvers provided as input to the method.
+            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
+            # If other name is provided, try the name provided
+            # If these options fail, try default ECOS, OSQP, SCS options
             try:
-                problem.solve(warm_start=True)
+                if self.solver == 'default':
+                    problem.solve(warm_start=True)
+                else:
+                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
+                    problem.solve(**solver_dict)
             except (ValueError, cvxpy.error.SolverError):
-                for elt in self.solver:
+                logging.warning(
+                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
+                    'details')
+                solver = ['ECOS', 'OSQP', 'SCS']
+                for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
@@ -488,6 +534,7 @@ class ASGL:
                             break
                     except (ValueError, cvxpy.error.SolverError):
                         continue
+            self.solver_stats = problem.solver_stats
             if problem.status in ["infeasible", "unbounded"]:
                 logging.warning('Optimization problem status failure')
             beta_sol = beta_var.value
@@ -502,6 +549,7 @@ class ASGL:
         """
         n = x.shape[0]
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
+        group_index = np.asarray(group_index).astype(int)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
@@ -535,12 +583,21 @@ class ASGL:
         # Solve the problem iteratively for each parameter value
         for lam, gl in param:
             gl_weights_param.value = lam * gl
-            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
-            # ValueError arises, try the solvers provided as input to the method.
+            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
+            # If other name is provided, try the name provided
+            # If these options fail, try default ECOS, OSQP, SCS options
             try:
-                problem.solve(warm_start=True)
+                if self.solver == 'default':
+                    problem.solve(warm_start=True)
+                else:
+                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
+                    problem.solve(**solver_dict)
             except (ValueError, cvxpy.error.SolverError):
-                for elt in self.solver:
+                logging.warning(
+                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
+                    'details')
+                solver = ['ECOS', 'OSQP', 'SCS']
+                for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
@@ -548,6 +605,7 @@ class ASGL:
                             break
                     except (ValueError, cvxpy.error.SolverError):
                         continue
+            self.solver_stats = problem.solver_stats
             if problem.status in ["infeasible", "unbounded"]:
                 logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
@@ -561,6 +619,7 @@ class ASGL:
         """
         n, m = x.shape
         # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
+        group_index = np.asarray(group_index).astype(int)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
@@ -600,12 +659,21 @@ class ASGL:
         for lam, al, lw, glw in param:
             l_weights_param.value = lw * lam * al
             gl_weights_param.value = glw * lam * (1 - al)
-            # Solve the problem. Try first default CVXPY option, which is usually optimal for the problem. If a
-            # ValueError arises, try the solvers provided as input to the method.
+            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
+            # If other name is provided, try the name provided
+            # If these options fail, try default ECOS, OSQP, SCS options
             try:
-                problem.solve(warm_start=True)
+                if self.solver == 'default':
+                    problem.solve(warm_start=True)
+                else:
+                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
+                    problem.solve(**solver_dict)
             except (ValueError, cvxpy.error.SolverError):
-                for elt in self.solver:
+                logging.warning(
+                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
+                    'details')
+                solver = ['ECOS', 'OSQP', 'SCS']
+                for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
                         problem.solve(**solver_dict)
@@ -613,6 +681,7 @@ class ASGL:
                             break
                     except (ValueError, cvxpy.error.SolverError):
                         continue
+            self.solver_stats = problem.solver_stats
             if problem.status in ["infeasible", "unbounded"]:
                 logging.warning('Optimization problem status failure')
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
@@ -676,7 +745,6 @@ class ASGL:
         this function solves the model and produces the regression coefficients
         """
         param = self._preprocessing()
-        group_index = np.asarray(group_index).astype(int)
         if self.penalization is None:
             self.coef_ = self.unpenalized_solver(x=x, y=y)
         else:
