@@ -2,7 +2,7 @@
 
 ## Introduction
 
-`asgl` is a Python package that solves several regression related models for simultaneous variable selection and prediction, in low and high dimensional frameworks. This package is directly related to research work shown on [this paper](https://link.springer.com/article/10.1007/s11634-020-00413-8).
+`asgl` is a Python package that solves several regression related models for simultaneous variable selection and prediction, in low and high dimensional frameworks. This package is directly related to research work shown on [this paper](https://link.springer.com/article/10.1007/s11634-020-00413-8) and a full description of the capabilities of the package is shown on [this paper](https://arxiv.org/abs/2111.00472).
 
 The current version of the package supports:
 * Linear regression models
