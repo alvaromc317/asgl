@@ -1,8 +1,11 @@
 # `asgl` package
 
+[![Downloads](https://pepy.tech/badge/asgl)](https://pepy.tech/project/asgl)
+[![Downloads](https://pepy.tech/badge/asgl/month)](https://pepy.tech/project/asgl)
+
 ## Introduction
 
-`asgl` is a Python package that solves several regression related models for simultaneous variable selection and prediction, in low and high dimensional frameworks. This package is directly related to research work shown on [this paper](https://link.springer.com/article/10.1007/s11634-020-00413-8) and a full description of the capabilities of the package is shown on [this paper](https://arxiv.org/abs/2111.00472).
+`asgl` is a Python package that solves several regression related models for simultaneous variable selection and prediction, in low and high dimensional frameworks. This package is directly related to research work shown on [this paper](https://link.springer.com/article/10.1007/s11634-020-00413-8) and a full description of the capabilities of the package is shown on [this paper](https://arxiv.org/abs/2111.00472). We also suggest accessing the  user_guide notebook provided in the [GitHub repository](https://github.com/alvaromc317/asgl). Or you can find more accesible explanations [here](https://towardsdatascience.com/sparse-group-lasso-in-python-255e379ab892) and [here](https://towardsdatascience.com/an-adaptive-lasso-63afca54b80d).
 
 The current version of the package supports:
 * Linear regression models
@@ -65,8 +68,6 @@ print(f'We are considering a grid of {num_models} models, optimized based on {k_
 # Obtain the mean error across different folds
 error = np.mean(error, axis=1)
 ```       
-
-For a full review on the capabilities of these package we suggest accessing the  user_guide notebook provided in the [GitHub repository](https://github.com/alvaromc317/asgl). Additionally, you can find more [here](https://towardsdatascience.com/sparse-group-lasso-in-python-255e379ab892) and [here](https://towardsdatascience.com/an-adaptive-lasso-63afca54b80d).
 
 ### Citing
 ___
