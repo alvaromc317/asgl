@@ -15,8 +15,7 @@ from sklearn.multioutput import MultiOutputRegressor
 from optuna.integration import OptunaSearchCV
 from optuna.distributions import FloatDistribution
 
-import sklearn_expansion
-from sklearn_expansion.linear_model import (
+from asgl.sklearn import (
     LinearRegression,
     QuantileRegression,
     Lasso,
@@ -192,7 +191,7 @@ def test_model_pipeline_gridsearchcv_cross_validate(estimator, param_grid) -> No
 def test_compare_lasso(alpha, fit_intercept) -> None:
     X, y = make_regression(n_samples=30, n_features=30)
     sklasso = sklearn.linear_model.Lasso(alpha=alpha, fit_intercept=fit_intercept)
-    lasso = sklearn_expansion.linear_model.Lasso(
+    lasso = asgl.sklearn.linear_model.Lasso(
         alpha=alpha, fit_intercept=fit_intercept
     )
     sklasso.fit(X, y)
