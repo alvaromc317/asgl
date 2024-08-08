@@ -94,7 +94,7 @@ class ASGL:
         response_2 = False
         if isinstance(self.intercept, bool):
             response_1 = True
-        if isinstance(self.tol, np.float):
+        if isinstance(self.tol, float):
             response_2 = True
         response = response_1 and response_2
         return response
@@ -115,7 +115,7 @@ class ASGL:
         n_lambda = None
         lambda_vector = None
         if self.penalization is not None:
-            if isinstance(self.lambda1, (np.float, np.int)):
+            if isinstance(self.lambda1, (float, int)):
                 lambda_vector = [self.lambda1]
             else:
                 lambda_vector = self.lambda1
@@ -131,7 +131,7 @@ class ASGL:
         alpha_vector = None
         if 'sgl' in self.penalization:
             if self.alpha is not None:
-                if isinstance(self.alpha, (np.float, np.int)):
+                if isinstance(self.alpha, (float, int)):
                     alpha_vector = [self.alpha]
                 else:
                     alpha_vector = self.alpha
@@ -151,7 +151,7 @@ class ASGL:
                     if isinstance(weights[0], list):
                         weights_list = [np.asarray(elt) for elt in weights]
                     # If weights is a list of numbers -> store in a list
-                    elif isinstance(weights[0], (np.float, np.int)):
+                    elif isinstance(weights[0], (float, int)):
                         weights_list = [np.asarray(weights)]
                     else:
                         # If it is a list of arrays, maintain this way
