@@ -1,15 +1,11 @@
 import numpy as np
 import asgl
-from sklearn.datasets import load_boston
 import time
+from sklearn.datasets import make_regression
 
 # Import test data #
-
-boston = load_boston()
-x = boston.data
-y = boston.target
-group_index = np.array([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5])
-
+x, y = make_regression(n_samples=200, n_features=30, random_state=42)
+group_index = np.random.randint(1, 6, 30)
 
 def equal_array(array0, array1, tol=1e-6):
     n0 = array0.shape[0]
@@ -48,38 +44,24 @@ if __name__ == '__main__':
 
     print(f'Entering adaptive formulations.  Execution time: {time.time() - start_time}')
 
-    # Adaptive lasso in sparse group lasso
-    tvt_class = asgl.TVT(model='qr', penalization='asgl_lasso', lambda1=[0.01, 0.1, 1, 10], tau=0.2,
-                         alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=9, weight_technique='pca_pct',
-                         lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2], variability_pct=0.8,
-                         error_type='QRE', random_state=1, train_size=100, validate_size=200)
-    tvt_class.train_validate_test(x, y, group_index)
-
-    # Adaptive group lasso in sparse group lasso
-    tvt_class = asgl.TVT(model='qr', penalization='asgl_gl', lambda1=[0.01, 0.1, 1, 10], tau=0.99,
-                         alpha=[0.1, 0.5, 0.9], parallel=True, weight_technique='pls_pct',
-                         lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2], variability_pct=0.7,
-                         error_type='QRE', random_state=99, train_size=100, validate_size=200)
-    tvt_class.train_validate_test(x, y, group_index)
-
     # Adaptive sparse group lasso
     tvt_class = asgl.TVT(model='qr', penalization='asgl', lambda1=[0.01, 0.1, 1, 10], tau=0.5,
-                         alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=9, weight_technique='pca_1',
-                         lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2], variability_pct=0.7,
-                         error_type='QRE', random_state=99, train_size=300, validate_size=200)
-    tvt_class.train_validate_test(x, y, group_index)
-
-    tvt_class = asgl.TVT(model='qr', penalization='asgl', lambda1=[0.01, 0.1, 1, 10], tau=0.5,
-                         alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=9, weight_technique='pls_1',
+                         alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=3, weight_technique='pca_1',
                          lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2], variability_pct=0.7,
                          error_type='QRE', random_state=99, train_size=100, validate_size=50)
     tvt_class.train_validate_test(x, y, group_index)
 
     tvt_class = asgl.TVT(model='qr', penalization='asgl', lambda1=[0.01, 0.1, 1, 10], tau=0.5,
-                         alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=9, weight_technique='sparse_pca',
+                         alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=3, weight_technique='pls_1',
+                         lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2], variability_pct=0.7,
+                         error_type='QRE', random_state=99, train_size=50, validate_size=50)
+    tvt_class.train_validate_test(x, y, group_index)
+
+    tvt_class = asgl.TVT(model='qr', penalization='asgl', lambda1=[0.01, 0.1, 1, 10], tau=0.5,
+                         alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=3, weight_technique='sparse_pca',
                          lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.8, 1, 1.2], variability_pct=0.7,
                          error_type='QRE', random_state=99, spca_alpha=1e-1, spca_ridge_alpha=1e-5,
-                         train_size=300, validate_size=200)
+                         train_size=120, validate_size=70)
     tvt_class.train_validate_test(x, y, group_index)
 
     print(f'Finished with no error. Execution time: {time.time() - start_time}')

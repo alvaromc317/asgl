@@ -12,29 +12,58 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s -
 
 
 class WEIGHTS:
+    """
+    Parameters
+    ----------
+    model: str, default = 'lm'
+        Model to be fit. Currently, accepts:
+            - 'lm': linear regression models.
+            - 'qr': quantile regression models.
+    penalization: str, default = 'asgl'
+        Penalization to use. Currently, accepts:
+            - None: unpenalized model.
+            - 'lasso': lasso model.
+            - 'gl': group lasso model.
+            - 'sgl': sparse group lasso model.
+            - 'alasso': adaptive lasso model.
+            - 'agl': adaptive group lasso model.
+            - 'asgl': adaptive sparse group lasso model.
+    tau: float, defaul=0.5
+        quantile level in quantile regression models. Valid values are between 0 and 1. It only has effect if
+        ``model='qr'``
+    weight_technique: str, default='pca_pct'
+        Weight technique used to fit the adaptive weights. Currently, accepts:
+            - pca_1: Builds the weights using the first component from PCA.
+            - pca_pct: Builds the weights using as many components from PCAas required to achieve the `
+            `variability_pct``.
+            - pls_1: Builds the weights using the first component from PLS.
+            - pls_pct:  Builds the weights using as many components from PLS as indicated to achieve the
+            ``variability_pct``.
+            - lasso: Builds the weights using the lasso model.
+            - unpenalized: Builds the weights using the unpenalized model.
+            - sparse_pca: Similar to 'pca_pct' but it builds the weights using sparse PCA components.
+    weight_tol: float, default=1e-5
+        Tolerance value used to avoid ZeroDivision errors when computing the weights.
+    lasso_power_weight: float, default=1
+        Power at which the lasso weights are risen. If it is float, it solves the model for the specific value.
+        If it is an array, it solves the model for all specified values in the array.
+    gl_power_weight: float, default=1
+        Power at which the group lasso weights are risen. If it is float, it solves the model for the specific value.
+        If it is an array, it solves the model for all specified values in the array.
+    variability_pct: float, default=0.9
+        Percentage of variability explained by pca, pls and sparse_pca components. It only has effect if
+        `` weight_technique`` is one of the following: 'pca_pct', 'pls_pct', 'sparse_pca'.
+    lambda1_weights: float, default=0.1
+        The value of the parameter ``lambda1`` used to solve the lasso model if ``weight_technique='lasso'``
+    spca_alpha: float, default=1e-5
+        sparse PCA parameter. See sklearn implementation of sparse PCA for more details.
+    spca_ridge_alpha: float, default=1e-2
+        sparse PCA parameter. See sklearn implementation of sparse PCA for more details.
+    """
     def __init__(self, model='lm', penalization='asgl', tau=0.5, weight_technique='pca_pct', weight_tol=1e-4,
-                 lasso_power_weight=1, gl_power_weight=1, variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5,
+                 lasso_power_weight=1, gl_power_weight=1, variability_pct=0.9, lambda1_weights=0.1, spca_alpha=1e-5,
                  spca_ridge_alpha=1e-2):
-        """
-        Parameters:
-            model: model to be fit using these weights (accepts 'lm' or 'qr')
-            penalization: penalization to use ('asgl', 'asgl_lasso', 'asgl_gl')
-            tau: quantile level in quantile regression models
-            weight_technique: weight technique to use for fitting the adaptive weights. Accepts 'pca_1', 'pca_pct',
-                    'pls_1', 'pls_pct', 'unpenalized_lm', 'unpenalized_qr', 'spca'
-            weight_tol: Tolerance value used for avoiding ZeroDivision errors
-            lasso_power_weight: parameter value, power at which the lasso weights are risen
-            gl_power_weight: parameter value, power at which the group lasso weights are risen
-            variability_pct: parameter value, percentage of variability explained by pca or pls components used in
-                    'pca_pct', 'pls_pct' and 'spca'
-            lambda1_weights: in case lasso is used as weight calculation alternative, the value for lambda1
-            spca_alpha: sparse PCA parameter
-            spca_ridge_alpha: sparse PCA parameter
-        Returns:
-            This is a class definition so there is no return. Main method of this class is fit, that returns adaptive
-            weights computed based on the class input parameters.
-        """
-        self.valid_penalizations = ['alasso', 'agl', 'asgl', 'asgl_lasso', 'asgl_gl']
+        self.valid_penalizations = ['alasso', 'agl', 'asgl']
         self.model = model
         self.penalization = penalization
         self.tau = tau
@@ -188,12 +217,6 @@ class WEIGHTS:
             gl_weights = None
         elif self.penalization == 'agl':
             lasso_weights = None
-            gl_weights = self._gl_weights_calculation(tmp_weight, group_index)
-        elif self.penalization == 'asgl_lasso':
-            lasso_weights = self._lasso_weights_calculation(tmp_weight)
-            gl_weights = np.ones(len(np.unique(group_index)))
-        elif self.penalization == 'asgl_gl':
-            lasso_weights = np.ones(x.shape[1])
             gl_weights = self._gl_weights_calculation(tmp_weight, group_index)
         elif self.penalization == 'asgl':
             lasso_weights = self._lasso_weights_calculation(tmp_weight)

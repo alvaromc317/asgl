@@ -1,8 +1,8 @@
-import sys
 import functools
 import itertools
 import logging
 import multiprocessing as mp
+import sys
 
 import cvxpy
 import numpy as np
@@ -12,32 +12,60 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s -
 
 
 class ASGL:
-    def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
+    """
+    Parameters
+    ----------
+    model: str, default = 'lm'
+        Model to be fit. Currently, accepts:
+            - 'lm': linear regression models.
+            - 'qr': quantile regression models.
+    penalization: str or None, default = 'lasso'
+        Penalization to use. Currently, accepts:
+            - None: unpenalized model.
+            - 'lasso': lasso model.
+            - 'gl': group lasso model.
+            - 'sgl': sparse group lasso model.
+            - 'alasso': adaptive lasso model.
+            - 'agl': adaptive group lasso model.
+            - 'asgl': adaptive sparse group lasso model.
+    intercept: bool, default=True,
+        Whether to calculate the intercept for this model. If set to False, no intercept will be used in calculations.
+    tol: float, default=1e-5
+        The tolerance for a coefficient in the model to be considered as 0. Values smaller than ``tol`` are assumed to
+        be 0.
+    lambda1: float or array, defaul=0.1
+        Controls the level of shrinkage applied on penalizations. Smaller values specify weaker regularization.
+        If it is float, it solves the model for the specific value. If it is an array, it solves the model for all
+        specified values in the array.
+    alpha: float or array, default=0.5
+        Tradeoff between lasso and group lasso in sgl and asgl penalizations. ``alpha=1`` enforces a lasso penalization
+        while ``alpha=0`` enforces a group lasso penalization. If it is float, it solves the model for the specific
+        value. If it is an array, it solves the model for all specified values in the array.
+    tau: float, defaul=0.5
+        quantile level in quantile regression models. Valid values are between 0 and 1. It only has effect if
+        ``model='qr'``
+    lasso_weights: array, lost of arrays or None, default=None
+        An array containing the values of lasso weights in adaptive penalizations.
+        If it is an array, it solves the model for the specific set of weights. If it is a list of arrays, it solves
+        the model for all specified arrays in the list. Each array must have length equal to the number of variables.
+    gl_weights: array, list of arrays or None default=None
+        An array containing the values of group lasso weights in adaptive penalizations.
+        If it is an array, it solves the model for the specific set of weights. If it is a list of arrays, it solves
+        the model for all specified arrays in the list. Each array must have length equal to the number of groups.
+    parallel: bool, default=False
+        Should te models be solved in parallel or sequentially.
+    num_cores: int or None, default=None
+        If ``parallel=True``, ``num_cores`` indicates the number of cores to use in the execution. If it has value
+        None, it takes the value of maximum number of cores -1
+    solver: str, defaul='defaul'
+        Solver to be used by CVXPY. Default uses optimal alternative depending on the problem.
+    max_iters: int, default=500
+        CVXPY parameter indicating the maximum number of iterations.
+    """
+    def __init__(self, model='lm', penalization='lasso', intercept=True, tol=1e-5, lambda1=0.1, alpha=0.5, tau=0.5,
                  lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='default', max_iters=500):
-        """
-        Parameters:
-            model: model to be fit (accepts 'lm' or 'qr')
-            penalization: penalization to use (accepts None, 'lasso', 'gl', 'sgl', 'asgl', 'asgl_lasso', 'asgl_gl',
-                          alasso, agl)
-            intercept: boolean, whether to fit the model including intercept or not
-            tol:  tolerance for a coefficient in the model to be considered as 0
-            lambda1: parameter value that controls the level of shrinkage applied on penalizations
-            alpha: parameter value, tradeoff between lasso and group lasso in sgl penalization
-            tau: quantile level in quantile regression models
-            lasso_weights: lasso weights in adaptive penalizations
-            gl_weights: group lasso weights in adaptive penalizations
-            parallel: boolean, whether to execute the code in parallel or sequentially
-            num_cores: if parallel is set to true, the number of cores to use in the execution. Default is (max - 1)
-            solver: solver to be used by CVXPY. default uses optimal alternative depending on the problem
-            max_iters: CVXPY parameter. Default is 500
-
-        Returns:
-            This is a class definition so there is no return. Main method of this class is fit,  that has no return
-            but outputs automatically to _coef.
-            ASGL._coef stores a list of regression model coefficients.
-        """
         self.valid_models = ['lm', 'qr']
-        self.valid_penalizations = ['lasso', 'gl', 'sgl', 'alasso', 'agl', 'asgl', 'asgl_lasso', 'asgl_gl']
+        self.valid_penalizations = ['lasso', 'gl', 'sgl', 'alasso', 'agl', 'asgl']
         self.model = model
         self.penalization = penalization
         self.intercept = intercept
@@ -72,12 +100,6 @@ class ASGL:
     def _penalization_checker(self):
         """
         Checks if the penalization is one of the valid options:
-         - lasso for lasso penalization
-         - gl for group lasso penalization
-         - sgl for sparse group lasso penalization
-         - asgl for adaptive sparse group lasso penalization
-         - asgl_lasso for an sparse group lasso with adaptive weights in the lasso part
-         - asgl_gl for an sparse group lasso with adaptive weights in the group lasso part
         """
         if (self.penalization in self.valid_penalizations) or (self.penalization is None):
             return True
@@ -140,11 +162,11 @@ class ASGL:
 
     def _preprocessing_weights(self, weights):
         """
-        Converts l_weights into a list of lists. Each list inside l_weights defines a set of weights for a model
+        Converts weights into a list of lists. Each list inside weights defines a set of weights for a model
         """
         n_weights = None
         weights_list = None
-        if self.penalization in ['asgl', 'asgl_lasso', 'asgl_gl', 'alasso', 'agl']:
+        if self.penalization in ['asgl', 'alasso', 'agl']:
             if weights is not None:
                 if isinstance(weights, list):
                     # If weights is a list of lists -> convert to list of arrays
@@ -230,7 +252,7 @@ class ASGL:
 
     def _num_beta_var_from_group_index(self, group_index):
         """
-        Internal function used in group based penalizations (gl, sgl, asgl, asgl_lasso, asgl_gl)
+        Internal function used in group based penalizations
         """
         group_sizes = []
         beta_var = []
@@ -257,7 +279,7 @@ class ASGL:
         problem = cvxpy.Problem(objective)
         # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
         # If other name is provided, try the name provided
-        # If these options fail, try default ECOS, OSQP, SCS options
+        # If these options fail, try default OSQP, SCS options
         try:
             if self.solver == 'default':
                 problem.solve(warm_start=True)
@@ -267,7 +289,7 @@ class ASGL:
         except (ValueError, cvxpy.error.SolverError):
             logging.warning('Default solver failed. Using alternative options. Check solver and solver_stats for more '
                             'details')
-            solver = ['ECOS', 'OSQP', 'SCS']
+            solver = ['OSQP', 'SCS']
             for elt in solver:
                 solver_dict = self._cvxpy_solver_options(solver=elt)
                 try:
@@ -312,7 +334,7 @@ class ASGL:
             lambda_param.value = lam
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default ECOS, OSQP, SCS options
+            # If these options fail, try default OSQP, SCS options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
@@ -323,7 +345,7 @@ class ASGL:
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['ECOS', 'OSQP', 'SCS']
+                solver = ['OSQP', 'SCS']
                 for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
@@ -383,7 +405,7 @@ class ASGL:
             lambda_param.value = lam
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default ECOS, OSQP, SCS options
+            # If these options fail, try default OSQP, SCS options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
@@ -394,7 +416,7 @@ class ASGL:
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['ECOS', 'OSQP', 'SCS']
+                solver = ['OSQP', 'SCS']
                 for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
@@ -457,7 +479,7 @@ class ASGL:
             grp_lasso_param.value = lam * (1 - al)
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default ECOS, OSQP, SCS options
+            # If these options fail, try default OSQP, SCS options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
@@ -468,7 +490,7 @@ class ASGL:
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['ECOS', 'OSQP', 'SCS']
+                solver = ['OSQP', 'SCS']
                 for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
@@ -514,7 +536,7 @@ class ASGL:
             l_weights_param.value = lam * lw
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default ECOS, OSQP, SCS options
+            # If these options fail, try default OSQP, SCS options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
@@ -525,7 +547,7 @@ class ASGL:
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['ECOS', 'OSQP', 'SCS']
+                solver = ['OSQP', 'SCS']
                 for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
@@ -585,7 +607,7 @@ class ASGL:
             gl_weights_param.value = lam * gl
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default ECOS, OSQP, SCS options
+            # If these options fail, try default OSQP, SCS options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
@@ -596,7 +618,7 @@ class ASGL:
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['ECOS', 'OSQP', 'SCS']
+                solver = ['OSQP', 'SCS']
                 for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
@@ -661,7 +683,7 @@ class ASGL:
             gl_weights_param.value = glw * lam * (1 - al)
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default ECOS, OSQP, SCS options
+            # If these options fail, try default OSQP, SCS options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
@@ -672,7 +694,7 @@ class ASGL:
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['ECOS', 'OSQP', 'SCS']
+                solver = ['OSQP', 'SCS']
                 for elt in solver:
                     solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
@@ -734,9 +756,6 @@ class ASGL:
     # FIT METHOD ######################################################################################################
 
     def _get_solver_names(self):
-        if 'asgl' in self.penalization:
-            return 'asgl'
-        else:
             return self.penalization
 
     def fit(self, x, y, group_index=None):
@@ -784,8 +803,8 @@ class ASGL:
         - num_models: total number of models to be solved for the grid of parameters given
         - n_lambda: number of different lambda1 values
         - n_alpha: number of different alpha values
-        - n_l_weights: number of different weights for the lasso part of the asgl (or asgl_lasso) penalizations
-        - n_gl_weights: number of different weights for the lasso part of the asgl (or asgl_gl) penalizations
+        - n_l_weights: number of different weights for the lasso part of the adaptive penalizations
+        - n_gl_weights: number of different weights for the group lasso part of the adaptive penalizations
         """
         # Run the input_checker to verify that the inputs have the correct format
         if self._input_checker() is False:
@@ -823,7 +842,7 @@ class ASGL:
                  Inputing param_index=120 (out of the 180 possible values)in this function will output the
                  lambda, alpha, and weights index for such value
         If the penalization under consideration does not include any of the required parameters (for example, if we are
-        solving an sparse group lasso model, we do not consider adaptive weights), the output regarding the non used
+        solving a sparse group lasso model, we do not consider adaptive weights), the output regarding the non-used
         parameters are set to be None.
         """
         number_parameters = self._num_parameters()
