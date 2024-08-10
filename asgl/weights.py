@@ -1,6 +1,7 @@
 import logging
 import sys
-
+from sklearn.base import BaseEstimator
+from sklearn.utils.validation import check_X_y
 import numpy as np
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
@@ -11,7 +12,7 @@ from .asgl import ASGL
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-class WEIGHTS:
+class WEIGHTS(BaseEstimator):
     """
     Parameters
     ----------
@@ -211,6 +212,8 @@ class WEIGHTS:
         Main function of the module, given the input specified in the class definition, this function computes
         the specified weights.
         """
+        if y is not None:
+            x, y = check_X_y(x, y)
         tmp_weight = getattr(self, self._weight_techniques_names())(x=x, y=y)
         if self.penalization == 'alasso':
             lasso_weights = self._lasso_weights_calculation(tmp_weight)

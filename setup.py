@@ -9,7 +9,7 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='asgl',
-    version='2.0.0',
+    version='1.0.6',
     author='Alvaro Mendez Civieta',
     author_email='alvaromc317@gmail.com',
     license='GNU General Public License',
@@ -23,7 +23,7 @@ setup(
               'sparse-group-lasso', 'high-dimension', 'quantile-regression'],
     python_requires='>=3.8',
     install_requires=["cvxpy >= 1.2.0",
-                      "numpy >= 1.2",
-                      "scikit-learn >= 0.23.1"],
+                      "numpy >= 1.20.0",
+                      "scikit-learn >= 1.0"],
     packages=find_packages()
 )
