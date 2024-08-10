@@ -133,3 +133,4 @@ dmypy.json
 .ipynb_checkpoints/
 .asgl/__pycache__
 .vscode/
+~.RMD
