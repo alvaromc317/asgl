@@ -12,13 +12,13 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s -
 
 class CvGeneralClass(asgl.ASGL):
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
                  variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE',
                  random_state=None):
         # ASGL
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
-                         num_cores, solver, max_iters)
+                         num_cores, solver)
         # Adaptive weights
         self.weight_technique = weight_technique
         self.weight_tol = weight_tol
@@ -102,8 +102,6 @@ class CV(CvGeneralClass):
         None, it takes the value of maximum number of cores -1
     solver: str, defaul='defaul'
         Solver to be used by CVXPY. Default uses optimal alternative depending on the problem.
-    max_iters: int, default=500
-        CVXPY parameter indicating the maximum number of iterations.
     weight_technique: str, default='pca_pct'
         Weight technique used to fit the adaptive weights. Currently, accepts:
             - pca_1: Builds the weights using the first component from PCA.
@@ -144,13 +142,13 @@ class CV(CvGeneralClass):
         Number of cross-validation folds.
     """
     def __init__(self, model='lm', penalization='lasso', intercept=True, tol=1e-5, lambda1=0.1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
                  variability_pct=0.9, lambda1_weights=0.1, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE',
                  random_state=None, nfolds=3):
         # CvGeneralClass
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
-                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight,
+                         num_cores, solver, weight_technique, weight_tol, lasso_power_weight,
                          gl_power_weight, variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type,
                          random_state)
         # Relative to cross validation / train validate / test
@@ -250,8 +248,6 @@ class TVT(CvGeneralClass):
         None, it takes the value of maximum number of cores -1
     solver: str, defaul='defaul'
         Solver to be used by CVXPY. Default uses optimal alternative depending on the problem.
-    max_iters: int, default=500
-        CVXPY parameter indicating the maximum number of iterations.
     weight_technique: str, default='pca_pct'
         Weight technique used to fit the adaptive weights. Currently, accepts:
             - pca_1: Builds the weights using the first component from PCA.
@@ -306,13 +302,13 @@ class TVT(CvGeneralClass):
         or validation will be used in testing. This parameter takes precedence over ``validate_pct``.
     """
     def __init__(self, model, penalization, intercept=True, tol=1e-5, lambda1=1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None, max_iters=500,
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver=None,
                  weight_technique='pca_pct', weight_tol=1e-4, lasso_power_weight=1, gl_power_weight=1,
                  variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE',
                  random_state=None, train_pct=0.7, validate_pct=0.05, train_size=None, validate_size=None):
 
         super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
-                         num_cores, solver, max_iters, weight_technique, weight_tol, lasso_power_weight,
+                         num_cores, solver, weight_technique, weight_tol, lasso_power_weight,
                          gl_power_weight, variability_pct, lambda1_weights, spca_alpha, spca_ridge_alpha, error_type,
                          random_state)
         self.train_pct = train_pct

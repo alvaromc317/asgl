@@ -59,11 +59,9 @@ class ASGL:
         None, it takes the value of maximum number of cores -1
     solver: str, defaul='defaul'
         Solver to be used by CVXPY. Default uses optimal alternative depending on the problem.
-    max_iters: int, default=500
-        CVXPY parameter indicating the maximum number of iterations.
     """
     def __init__(self, model='lm', penalization='lasso', intercept=True, tol=1e-5, lambda1=0.1, alpha=0.5, tau=0.5,
-                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='default', max_iters=500):
+                 lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='default'):
         self.valid_models = ['lm', 'qr']
         self.valid_penalizations = ['lasso', 'gl', 'sgl', 'alasso', 'agl', 'asgl']
         self.model = model
@@ -77,7 +75,6 @@ class ASGL:
         self.gl_weights = gl_weights
         self.parallel = parallel
         self.num_cores = num_cores
-        self.max_iters = max_iters
         self.coef_ = None
         # CVXPY solver parameters
         self.solver_stats = None
@@ -229,21 +226,6 @@ class ASGL:
                                                         gl_weights_list)
         return param
 
-    # CVXPY SOLVER RELATED OPTIONS ###################################################################################
-
-    def _cvxpy_solver_options(self, solver):
-        if solver == 'ECOS':
-            solver_dict = dict(solver=solver,
-                               max_iters=self.max_iters)
-        elif solver == 'OSQP':
-            solver_dict = dict(solver=solver,
-                               max_iter=self.max_iters)
-        else:
-            solver_dict = dict(solver=solver)
-        return solver_dict
-
-    # SOLVERS #########################################################################################################
-
     def _quantile_function(self, x):
         """
         Quantile function required for quantile regression models.
@@ -284,16 +266,14 @@ class ASGL:
             if self.solver == 'default':
                 problem.solve(warm_start=True)
             else:
-                solver_dict = self._cvxpy_solver_options(solver=self.solver)
-                problem.solve(**solver_dict)
+                problem.solve(solver=self.solver)
         except (ValueError, cvxpy.error.SolverError):
             logging.warning('Default solver failed. Using alternative options. Check solver and solver_stats for more '
                             'details')
-            solver = ['OSQP', 'SCS']
+            solver = ['CLARABEL', 'OSQP', 'SCS']
             for elt in solver:
-                solver_dict = self._cvxpy_solver_options(solver=elt)
                 try:
-                    problem.solve(**solver_dict)
+                    problem.solve(solver=elt)
                     if 'optimal' in problem.status:
                         break
                 except (ValueError, cvxpy.error.SolverError):
@@ -334,22 +314,20 @@ class ASGL:
             lambda_param.value = lam
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default OSQP, SCS options
+            # If these options fail, try a range of options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
                 else:
-                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
-                    problem.solve(**solver_dict)
+                    problem.solve(solver=self.solver)
             except (ValueError, cvxpy.error.SolverError):
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['OSQP', 'SCS']
+                solver = ['CLARABEL', 'OSQP', 'SCS']
                 for elt in solver:
-                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
-                        problem.solve(**solver_dict)
+                        problem.solve(solver=elt)
                         if 'optimal' in problem.status:
                             break
                     except (ValueError, cvxpy.error.SolverError):
@@ -405,22 +383,20 @@ class ASGL:
             lambda_param.value = lam
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default OSQP, SCS options
+            # If these options fail, try a range of options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
                 else:
-                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
-                    problem.solve(**solver_dict)
+                    problem.solve(solver=self.solver)
             except (ValueError, cvxpy.error.SolverError):
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['OSQP', 'SCS']
+                solver = ['CLARABEL', 'OSQP', 'SCS']
                 for elt in solver:
-                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
-                        problem.solve(**solver_dict)
+                        problem.solve(solver=elt)
                         if 'optimal' in problem.status:
                             break
                     except (ValueError, cvxpy.error.SolverError):
@@ -479,22 +455,20 @@ class ASGL:
             grp_lasso_param.value = lam * (1 - al)
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default OSQP, SCS options
+            # If these options fail, try a range of options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
                 else:
-                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
-                    problem.solve(**solver_dict)
+                    problem.solve(solver=self.solver)
             except (ValueError, cvxpy.error.SolverError):
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['OSQP', 'SCS']
+                solver = ['CLARABEL', 'OSQP', 'SCS']
                 for elt in solver:
-                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
-                        problem.solve(**solver_dict)
+                        problem.solve(solver=elt)
                         if 'optimal' in problem.status:
                             break
                     except (ValueError, cvxpy.error.SolverError):
@@ -536,22 +510,20 @@ class ASGL:
             l_weights_param.value = lam * lw
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default OSQP, SCS options
+            # If these options fail, try a range of options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
                 else:
-                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
-                    problem.solve(**solver_dict)
+                    problem.solve(solver=self.solver)
             except (ValueError, cvxpy.error.SolverError):
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['OSQP', 'SCS']
+                solver = ['CLARABEL', 'OSQP', 'SCS']
                 for elt in solver:
-                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
-                        problem.solve(**solver_dict)
+                        problem.solve(solver=elt)
                         if 'optimal' in problem.status:
                             break
                     except (ValueError, cvxpy.error.SolverError):
@@ -607,22 +579,20 @@ class ASGL:
             gl_weights_param.value = lam * gl
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default OSQP, SCS options
+            # If these options fail, try a range of options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
                 else:
-                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
-                    problem.solve(**solver_dict)
+                    problem.solve(solver=self.solver)
             except (ValueError, cvxpy.error.SolverError):
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['OSQP', 'SCS']
+                solver = ['CLARABEL', 'OSQP', 'SCS']
                 for elt in solver:
-                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
-                        problem.solve(**solver_dict)
+                        problem.solve(solver=elt)
                         if 'optimal' in problem.status:
                             break
                     except (ValueError, cvxpy.error.SolverError):
@@ -683,22 +653,20 @@ class ASGL:
             gl_weights_param.value = glw * lam * (1 - al)
             # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
             # If other name is provided, try the name provided
-            # If these options fail, try default OSQP, SCS options
+            # If these options fail, try a range of options
             try:
                 if self.solver == 'default':
                     problem.solve(warm_start=True)
                 else:
-                    solver_dict = self._cvxpy_solver_options(solver=self.solver)
-                    problem.solve(**solver_dict)
+                    problem.solve(solver=self.solver)
             except (ValueError, cvxpy.error.SolverError):
                 logging.warning(
                     'Default solver failed. Using alternative options. Check solver and solver_stats for more '
                     'details')
-                solver = ['OSQP', 'SCS']
+                solver = ['CLARABEL', 'OSQP', 'SCS']
                 for elt in solver:
-                    solver_dict = self._cvxpy_solver_options(solver=elt)
                     try:
-                        problem.solve(**solver_dict)
+                        problem.solve(solver=elt)
                         if 'optimal' in problem.status:
                             break
                     except (ValueError, cvxpy.error.SolverError):
@@ -756,7 +724,7 @@ class ASGL:
     # FIT METHOD ######################################################################################################
 
     def _get_solver_names(self):
-            return self.penalization
+        return self.penalization
 
     def fit(self, x, y, group_index=None):
         """

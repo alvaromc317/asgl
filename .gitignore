@@ -134,3 +134,4 @@ dmypy.json
 .asgl/__pycache__
 .vscode/
 README.Rmd
+.Rhistory

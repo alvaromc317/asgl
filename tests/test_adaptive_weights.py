@@ -26,7 +26,6 @@ if __name__ == '__main__':
                            lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.9, 1.1, 1.3, 1.5])
     l2, g2 = weights.fit(x, y, group_index=group_index)
 
-
     weights = asgl.WEIGHTS(model='lm', penalization='asgl', tau=0.5, weight_technique='unpenalized',
                            lasso_power_weight=[0.8, 1, 1.2], gl_power_weight=[0.9, 1.1, 1.3])
     l5, g5 = weights.fit(x, y, group_index=group_index)

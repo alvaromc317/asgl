@@ -51,7 +51,7 @@ if __name__ == '__main__':
     gl_fit = asgl_model.coef_
 
     asgl_model = asgl.ASGL(model='qr', penalization='gl', intercept=True, tol=1e-5, lambda1=[0.01, 0.1, 1, 10], tau=0.5,
-                           parallel=True, num_cores=10)
+                           parallel=True, num_cores=3)
     asgl_model.fit(x, y, group_index=group_index)
     gl_fit_parallel = asgl_model.coef_
 
@@ -59,7 +59,7 @@ if __name__ == '__main__':
 
     # Sparse group LASSO model
     asgl_model = asgl.ASGL(model='lm', penalization='sgl', intercept=True, tol=1e-5, lambda1=[0.01, 0.1, 1, 10],
-                           alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=9)
+                           alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=2)
     asgl_model.fit(x, y, group_index=group_index)
     sgl_fit_parallel = asgl_model.coef_
 
@@ -70,14 +70,8 @@ if __name__ == '__main__':
 
     asgl_model.retrieve_parameters_value(7)
 
-    # Try solvers
-    asgl_model = asgl.ASGL(model='lm', penalization='sgl', intercept=True, tol=1e-5, lambda1=[0.01, 0.1, 1, 10],
-                           alpha=[0.1, 0.5, 0.9], parallel=True, num_cores=9, solver=['OSQP', 'SCS'])
-    asgl_model.fit(x, y, group_index=group_index)
-    sgl_fit_parallel2 = asgl_model.coef_
-
     # Adaptive lasso
-    alasso_model = asgl.ASGL(model='qr', penalization='alasso', lambda1=[0.01, 0.1, 1, 10], parallel=True, num_cores=9,
+    alasso_model = asgl.ASGL(model='qr', penalization='alasso', lambda1=[0.01, 0.1, 1, 10], parallel=True, num_cores=2,
                              lasso_weights=[0.5] * 30, tau=0.25)
     alasso_model.fit(x, y, group_index=group_index)
 
