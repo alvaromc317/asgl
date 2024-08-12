@@ -17,8 +17,7 @@ class CvGeneralClass(asgl.ASGL):
                  variability_pct=0.9, lambda1_weights=1e-1, spca_alpha=1e-5, spca_ridge_alpha=1e-2, error_type='MSE',
                  random_state=None):
         # ASGL
-        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel,
-                         num_cores, solver)
+        super().__init__(model, penalization, intercept, tol, lambda1, alpha, tau, lasso_weights, gl_weights, parallel, num_cores, solver)
         # Adaptive weights
         self.weight_technique = weight_technique
         self.weight_tol = weight_tol

@@ -1,3 +1,5 @@
+# NEW FILE
+
 import functools
 import itertools
 import logging
@@ -60,6 +62,7 @@ class ASGL:
     solver: str, defaul='defaul'
         Solver to be used by CVXPY. Default uses optimal alternative depending on the problem.
     """
+
     def __init__(self, model='lm', penalization='lasso', intercept=True, tol=1e-5, lambda1=0.1, alpha=0.5, tau=0.5,
                  lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='default'):
         self.valid_models = ['lm', 'qr']
@@ -80,7 +83,7 @@ class ASGL:
         self.solver_stats = None
         self.solver = solver
 
-    # Model checker related functions #################################################################################
+    # Model checker related functions ---------------------------------------------------------------------------------
 
     def _model_checker(self):
         """
@@ -125,7 +128,7 @@ class ASGL:
         response_list = [self._model_checker(), self._penalization_checker(), self._dtype_checker()]
         return False not in response_list
 
-    # Preprocessing related functions #################################################################################
+    # Preprocessing related functions ---------------------------------------------------------------------------------
 
     def _preprocessing_lambda(self):
         """
@@ -236,44 +239,41 @@ class ASGL:
         """
         Internal function used in group based penalizations
         """
-        group_sizes = []
-        beta_var = []
-        unique_group_index = np.unique(group_index)
-        # Define the objective function
-        for idx in unique_group_index:
-            group_sizes.append(len(np.where(group_index == idx)[0]))
-            beta_var.append(cvxpy.Variable(len(np.where(group_index == idx)[0])))
+        unique_groups = np.unique(group_index)
+        group_sizes = [np.sum(group_index == grp) for grp in unique_groups]
+        beta_var = [cvxpy.Variable(size) for size in group_sizes]
         return group_sizes, beta_var
 
-    def unpenalized_solver(self, x, y):
+    # Model implementations -------------------------------------------------------------------------------------------
+
+    def _prepare_data(self, x, y, group_index=None):
         n, m = x.shape
-        # If we want an intercept, it adds a column of ones to the matrix x
+        if group_index is not None:
+            group_index = np.asarray(group_index).astype(int)
         if self.intercept:
-            m = m + 1
+            m += 1
             x = np.c_[np.ones(n), x]
-        # Define the objective function
-        beta_var = cvxpy.Variable(m)
+            if group_index is not None:
+                group_index = np.append(0, group_index)
+        return x, y, n, m, group_index
+
+    def _define_objective_function(self, y, model_prediction):
         if self.model == 'lm':
-            objective_function = (1.0 / n) * cvxpy.sum_squares(y - x @ beta_var)
+            return (1.0 / y.shape[0]) * cvxpy.sum_squares(y - model_prediction)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - x @ beta_var)))
-        objective = cvxpy.Minimize(objective_function)
-        problem = cvxpy.Problem(objective)
-        # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
-        # If other name is provided, try the name provided
-        # If these options fail, try default OSQP, SCS options
+            return (1.0 / y.shape[0]) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
+
+    def _solve_problem(self, problem):
         try:
             if self.solver == 'default':
                 problem.solve(warm_start=True)
             else:
                 problem.solve(solver=self.solver)
         except (ValueError, cvxpy.error.SolverError):
-            logging.warning('Default solver failed. Using alternative options. Check solver and solver_stats for more '
-                            'details')
-            solver = ['CLARABEL', 'OSQP', 'SCS']
-            for elt in solver:
+            logging.warning(f'Solver {self.solver} failed. Using alternative options from {cvxpy.installed_solvers()}')
+            for alt_solver in cvxpy.installed_solvers():
                 try:
-                    problem.solve(solver=elt)
+                    problem.solve(solver=alt_solver)
                     if 'optimal' in problem.status:
                         break
                 except (ValueError, cvxpy.error.SolverError):
@@ -281,405 +281,169 @@ class ASGL:
         self.solver_stats = problem.solver_stats
         if problem.status in ["infeasible", "unbounded"]:
             logging.warning('Optimization problem status failure')
+
+    def _unpenalized(self, x, y):
+        x, y, n, m, _ = self._prepare_data(x, y)
+        beta_var = cvxpy.Variable(m)
+        model_prediction = x @ beta_var
+        objective_function = self._define_objective_function(y, model_prediction)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function))
+        self._solve_problem(problem)
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
         return [beta_sol]
 
-    def lasso(self, x, y, param):
-        """
-        Lasso penalized solver
-        """
-        n, m = x.shape
-        # If we want an intercept, it adds a column of ones to the matrix x.
-        # Init_pen controls when the penalization starts, this way the intercept is not penalized
-        if self.intercept:
-            m = m + 1
-            x = np.c_[np.ones(n), x]
-            init_pen = 1
-        else:
-            init_pen = 0
-        # Define the objective function
+    def _lasso(self, x, y, param):
+        x, y, n, m, _ = self._prepare_data(x, y)
         lambda_param = cvxpy.Parameter(nonneg=True)
         beta_var = cvxpy.Variable(m)
-        lasso_penalization = lambda_param * cvxpy.norm(beta_var[init_pen:], 1)
-        if self.model == 'lm':
-            objective_function = (1.0 / n) * cvxpy.sum_squares(y - x @ beta_var)
+        model_prediction = x @ beta_var
+        objective_function = self._define_objective_function(y, model_prediction)
+        if self.intercept:
+            lasso_penalization = lambda_param * cvxpy.norm(beta_var[1:], 1)
         else:
-            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - x @ beta_var)))
-        objective = cvxpy.Minimize(objective_function + lasso_penalization)
-        problem = cvxpy.Problem(objective)
+            lasso_penalization = lambda_param * cvxpy.norm(beta_var, 1)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + lasso_penalization))
         beta_sol_list = []
-        # Solve the problem iteratively for each parameter value
         for lam in param:
             lambda_param.value = lam
-            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
-            # If other name is provided, try the name provided
-            # If these options fail, try a range of options
-            try:
-                if self.solver == 'default':
-                    problem.solve(warm_start=True)
-                else:
-                    problem.solve(solver=self.solver)
-            except (ValueError, cvxpy.error.SolverError):
-                logging.warning(
-                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
-                    'details')
-                solver = ['CLARABEL', 'OSQP', 'SCS']
-                for elt in solver:
-                    try:
-                        problem.solve(solver=elt)
-                        if 'optimal' in problem.status:
-                            break
-                    except (ValueError, cvxpy.error.SolverError):
-                        continue
-            self.solver_stats = problem.solver_stats
-            if problem.status in ["infeasible", "unbounded"]:
-                logging.warning('Optimization problem status failure')
+            self._solve_problem(problem)
             beta_sol = beta_var.value
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
-        logging.debug('Function finished without errors')
         return beta_sol_list
 
-    def gl(self, x, y, group_index, param):
-        """
-        Group lasso penalized solver
-        """
-        n = x.shape[0]
-        # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
-        group_index = np.asarray(group_index).astype(int)
+    def _gl(self, x, y, group_index, param):
+        x, y, n, _, group_index = self._prepare_data(x, y, group_index)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
         group_lasso_penalization = 0
-        # If the model has an intercept, we calculate the value of the model for the intercept group_index
-        # We start the penalization in inf_lim so if the model has an intercept, penalization starts after the intercept
         inf_lim = 0
         if self.intercept:
-            # Adds an element (referring to the intercept) to group_index, group_sizes, num groups
-            group_index = np.append(0, group_index)
-            unique_group_index = np.unique(group_index)
-            x = np.c_[np.ones(n), x]
-            group_sizes = [1] + group_sizes
-            beta_var = [cvxpy.Variable(1)] + beta_var
-            num_groups = num_groups + 1
-            # Compute model prediction for the intercept with no penalization
             model_prediction = x[:, np.where(group_index == unique_group_index[0])[0]] @ beta_var[0]
             inf_lim = 1
         for i in range(inf_lim, num_groups):
             model_prediction += x[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
             group_lasso_penalization += cvxpy.sqrt(group_sizes[i]) * cvxpy.norm(beta_var[i], 2)
-        if self.model == 'lm':
-            objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
-        else:
-            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
+        objective_function = self._define_objective_function(y, model_prediction)
         lambda_param = cvxpy.Parameter(nonneg=True)
-        objective = cvxpy.Minimize(objective_function + (lambda_param * group_lasso_penalization))
-        problem = cvxpy.Problem(objective)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + lambda_param * group_lasso_penalization))
         beta_sol_list = []
-        # Solve the problem iteratively for each parameter value
         for lam in param:
             lambda_param.value = lam
-            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
-            # If other name is provided, try the name provided
-            # If these options fail, try a range of options
-            try:
-                if self.solver == 'default':
-                    problem.solve(warm_start=True)
-                else:
-                    problem.solve(solver=self.solver)
-            except (ValueError, cvxpy.error.SolverError):
-                logging.warning(
-                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
-                    'details')
-                solver = ['CLARABEL', 'OSQP', 'SCS']
-                for elt in solver:
-                    try:
-                        problem.solve(solver=elt)
-                        if 'optimal' in problem.status:
-                            break
-                    except (ValueError, cvxpy.error.SolverError):
-                        continue
-            self.solver_stats = problem.solver_stats
-            if problem.status in ["infeasible", "unbounded"]:
-                logging.warning('Optimization problem status failure')
+            self._solve_problem(problem)
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
         return beta_sol_list
 
-    def sgl(self, x, y, group_index, param):
-        """
-        Sparse group lasso penalized solver
-        """
-        n = x.shape[0]
-        # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
-        group_index = np.asarray(group_index).astype(int)
+    def _sgl(self, x, y, group_index, param):
+        x, y, n, _, group_index = self._prepare_data(x, y, group_index)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
         lasso_penalization = 0
         group_lasso_penalization = 0
-        # If the model has an intercept, we calculate the value of the model for the intercept group_index
-        # We start the penalization in inf_lim so if the model has an intercept, penalization starts after the intercept
         inf_lim = 0
         if self.intercept:
-            group_index = np.append(0, group_index)
-            unique_group_index = np.unique(group_index)
-            x = np.c_[np.ones(n), x]
-            group_sizes = [1] + group_sizes
-            beta_var = [cvxpy.Variable(1)] + beta_var
-            num_groups = num_groups + 1
             model_prediction = x[:, np.where(group_index == unique_group_index[0])[0]] @ beta_var[0]
             inf_lim = 1
         for i in range(inf_lim, num_groups):
             model_prediction += x[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
             group_lasso_penalization += cvxpy.sqrt(group_sizes[i]) * cvxpy.norm(beta_var[i], 2)
             lasso_penalization += cvxpy.norm(beta_var[i], 1)
-        if self.model == 'lm':
-            objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
-        else:
-            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
+        objective_function = self._define_objective_function(y, model_prediction)
         lasso_param = cvxpy.Parameter(nonneg=True)
         grp_lasso_param = cvxpy.Parameter(nonneg=True)
-        objective = cvxpy.Minimize(objective_function +
-                                   (grp_lasso_param * group_lasso_penalization) +
-                                   (lasso_param * lasso_penalization))
-        problem = cvxpy.Problem(objective)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + grp_lasso_param * group_lasso_penalization + lasso_param * lasso_penalization))
         beta_sol_list = []
-        # Solve the problem iteratively for each parameter value
         for lam, al in param:
             lasso_param.value = lam * al
             grp_lasso_param.value = lam * (1 - al)
-            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
-            # If other name is provided, try the name provided
-            # If these options fail, try a range of options
-            try:
-                if self.solver == 'default':
-                    problem.solve(warm_start=True)
-                else:
-                    problem.solve(solver=self.solver)
-            except (ValueError, cvxpy.error.SolverError):
-                logging.warning(
-                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
-                    'details')
-                solver = ['CLARABEL', 'OSQP', 'SCS']
-                for elt in solver:
-                    try:
-                        problem.solve(solver=elt)
-                        if 'optimal' in problem.status:
-                            break
-                    except (ValueError, cvxpy.error.SolverError):
-                        continue
-            self.solver_stats = problem.solver_stats
-            if problem.status in ["infeasible", "unbounded"]:
-                logging.warning('Optimization problem status failure')
+            self._solve_problem(problem)
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
         return beta_sol_list
 
-    def alasso(self, x, y, param):
-        """
-        Lasso penalized solver
-        """
-        n, m = x.shape
-        # If we want an intercept, it adds a column of ones to the matrix x.
-        # Init_pen controls when the penalization starts, this way the intercept is not penalized
-        if self.intercept:
-            m = m + 1
-            x = np.c_[np.ones(n), x]
-            init_pen = 1
-        else:
-            init_pen = 0
-        # Define the objective function
+    def _alasso(self, x, y, param):
+        x, y, n, m, _ = self._prepare_data(x, y)
         l_weights_param = cvxpy.Parameter(m, nonneg=True)
         beta_var = cvxpy.Variable(m)
+        model_prediction = x @ beta_var
+        objective_function = self._define_objective_function(y, model_prediction)
+        init_pen = 1 if self.intercept else 0
         lasso_penalization = cvxpy.norm(l_weights_param[init_pen:].T @ cvxpy.abs(beta_var[init_pen:]), 1)
-        if self.model == 'lm':
-            objective_function = (1.0 / n) * cvxpy.sum_squares(y - x @ beta_var)
-        else:
-            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - x @ beta_var)))
-        objective = cvxpy.Minimize(objective_function + lasso_penalization)
-        problem = cvxpy.Problem(objective)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + lasso_penalization))
         beta_sol_list = []
-        # Solve the problem iteratively for each parameter value
         for lam, lw in param:
             l_weights_param.value = lam * lw
-            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
-            # If other name is provided, try the name provided
-            # If these options fail, try a range of options
-            try:
-                if self.solver == 'default':
-                    problem.solve(warm_start=True)
-                else:
-                    problem.solve(solver=self.solver)
-            except (ValueError, cvxpy.error.SolverError):
-                logging.warning(
-                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
-                    'details')
-                solver = ['CLARABEL', 'OSQP', 'SCS']
-                for elt in solver:
-                    try:
-                        problem.solve(solver=elt)
-                        if 'optimal' in problem.status:
-                            break
-                    except (ValueError, cvxpy.error.SolverError):
-                        continue
-            self.solver_stats = problem.solver_stats
-            if problem.status in ["infeasible", "unbounded"]:
-                logging.warning('Optimization problem status failure')
+            self._solve_problem(problem)
             beta_sol = beta_var.value
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
-        logging.debug('Function finished without errors')
         return beta_sol_list
 
-    def agl(self, x, y, group_index, param):
-        """
-        Group lasso penalized solver
-        """
-        n = x.shape[0]
-        # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
-        group_index = np.asarray(group_index).astype(int)
+    def _agl(self, x, y, group_index, param):
+        x, y, n, _, group_index = self._prepare_data(x, y, group_index)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
         group_lasso_penalization = 0
-        # If the model has an intercept, we calculate the value of the model for the intercept group_index
-        # We start the penalization in inf_lim so if the model has an intercept, penalization starts after the intercept
         inf_lim = 0
         if self.intercept:
-            # Adds an element (referring to the intercept) to group_index, group_sizes, num groups
-            group_index = np.append(0, group_index)
-            unique_group_index = np.unique(group_index)
-            x = np.c_[np.ones(n), x]
-            group_sizes = [1] + group_sizes
-            beta_var = [cvxpy.Variable(1)] + beta_var
-            num_groups = num_groups + 1
-            # Compute model prediction for the intercept with no penalization
             model_prediction = x[:, np.where(group_index == unique_group_index[0])[0]] @ beta_var[0]
             inf_lim = 1
         gl_weights_param = cvxpy.Parameter(num_groups, nonneg=True)
         for i in range(inf_lim, num_groups):
             model_prediction += x[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
             group_lasso_penalization += cvxpy.sqrt(group_sizes[i]) * gl_weights_param[i] * cvxpy.norm(beta_var[i], 2)
-        if self.model == 'lm':
-            objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
-        else:
-            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
-        objective = cvxpy.Minimize(objective_function + group_lasso_penalization)
-        problem = cvxpy.Problem(objective)
+        objective_function = self._define_objective_function(y, model_prediction)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + group_lasso_penalization))
         beta_sol_list = []
-        # Solve the problem iteratively for each parameter value
         for lam, gl in param:
             gl_weights_param.value = lam * gl
-            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
-            # If other name is provided, try the name provided
-            # If these options fail, try a range of options
-            try:
-                if self.solver == 'default':
-                    problem.solve(warm_start=True)
-                else:
-                    problem.solve(solver=self.solver)
-            except (ValueError, cvxpy.error.SolverError):
-                logging.warning(
-                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
-                    'details')
-                solver = ['CLARABEL', 'OSQP', 'SCS']
-                for elt in solver:
-                    try:
-                        problem.solve(solver=elt)
-                        if 'optimal' in problem.status:
-                            break
-                    except (ValueError, cvxpy.error.SolverError):
-                        continue
-            self.solver_stats = problem.solver_stats
-            if problem.status in ["infeasible", "unbounded"]:
-                logging.warning('Optimization problem status failure')
+            self._solve_problem(problem)
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
         return beta_sol_list
 
-    def asgl(self, x, y, group_index, param):
-        """
-        adaptive sparse group lasso penalized solver
-        """
-        n, m = x.shape
-        # Check th group_index, find the unique groups, count how many vars are in each group (this is the group size)
-        group_index = np.asarray(group_index).astype(int)
+    def _asgl(self, x, y, group_index, param):
+        x, y, n, m, group_index = self._prepare_data(x, y, group_index)
         unique_group_index = np.unique(group_index)
         group_sizes, beta_var = self._num_beta_var_from_group_index(group_index)
         num_groups = len(group_sizes)
         model_prediction = 0
-        alasso_penalization = 0
-        a_group_lasso_penalization = 0
-        # If the model has an intercept, we calculate the value of the model for the intercept group_index
-        # We start the penalization in inf_lim so if the model has an intercept, penalization starts after the intercept
+        lasso_penalization = 0
+        group_lasso_penalization = 0
         inf_lim = 0
         if self.intercept:
-            group_index = np.append(0, group_index)
-            unique_group_index = np.unique(group_index)
-            x = np.c_[np.ones(n), x]
-            m = m + 1
-            group_sizes = [1] + group_sizes
-            beta_var = [cvxpy.Variable(1)] + beta_var
-            num_groups = num_groups + 1
             model_prediction = x[:, np.where(group_index == unique_group_index[0])[0]] @ beta_var[0]
             inf_lim = 1
         l_weights_param = cvxpy.Parameter(m, nonneg=True)
         gl_weights_param = cvxpy.Parameter(num_groups, nonneg=True)
         for i in range(inf_lim, num_groups):
             model_prediction += x[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
-            a_group_lasso_penalization += cvxpy.sqrt(group_sizes[i]) * gl_weights_param[i] * cvxpy.norm(beta_var[i], 2)
-            alasso_penalization += l_weights_param[np.where(group_index ==
-                                                            unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
-        if self.model == 'lm':
-            objective_function = (1.0 / n) * cvxpy.sum_squares(y - model_prediction)
-        else:
-            objective_function = (1.0 / n) * cvxpy.sum(self._quantile_function(x=(y - model_prediction)))
-        objective = cvxpy.Minimize(objective_function +
-                                   a_group_lasso_penalization +
-                                   alasso_penalization)
-        problem = cvxpy.Problem(objective)
+            group_lasso_penalization += cvxpy.sqrt(group_sizes[i]) * gl_weights_param[i] * cvxpy.norm(beta_var[i], 2)
+            lasso_penalization += l_weights_param[np.where(group_index == unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
+        objective_function = self._define_objective_function(y, model_prediction)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + group_lasso_penalization + lasso_penalization))
         beta_sol_list = []
-        # Solve the problem iteratively for each parameter value
         for lam, al, lw, glw in param:
             l_weights_param.value = lw * lam * al
             gl_weights_param.value = glw * lam * (1 - al)
-            # Solve the problem. If solver is left as default, try optimal solver sugested by cvxpy.
-            # If other name is provided, try the name provided
-            # If these options fail, try a range of options
-            try:
-                if self.solver == 'default':
-                    problem.solve(warm_start=True)
-                else:
-                    problem.solve(solver=self.solver)
-            except (ValueError, cvxpy.error.SolverError):
-                logging.warning(
-                    'Default solver failed. Using alternative options. Check solver and solver_stats for more '
-                    'details')
-                solver = ['CLARABEL', 'OSQP', 'SCS']
-                for elt in solver:
-                    try:
-                        problem.solve(solver=elt)
-                        if 'optimal' in problem.status:
-                            break
-                    except (ValueError, cvxpy.error.SolverError):
-                        continue
-            self.solver_stats = problem.solver_stats
-            if problem.status in ["infeasible", "unbounded"]:
-                logging.warning('Optimization problem status failure')
+            self._solve_problem(problem)
             beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
             beta_sol[np.abs(beta_sol) < self.tol] = 0
             beta_sol_list.append(beta_sol)
         return beta_sol_list
 
-    # PARALLEL CODE ###################################################################################################
+    # PARALLEL CODE ---------------------------------------------------------------------------------------------------
 
     def _parallel_execution(self, x, y, param, group_index=None):
         """
@@ -707,8 +471,7 @@ class ASGL:
         if self.penalization in ['lasso', 'alasso']:
             global_results = pool.map(functools.partial(getattr(self, self._get_solver_names()), x, y), chunks)
         else:
-            global_results = pool.map(functools.partial(getattr(self, self._get_solver_names()), x, y, group_index),
-                                      chunks)
+            global_results = pool.map(functools.partial(getattr(self, self._get_solver_names()), x, y, group_index), chunks)
         pool.close()
         pool.join()
         # Re-build the output of the function
@@ -721,10 +484,10 @@ class ASGL:
             beta_sol_list.extend(global_results[i])
         return beta_sol_list
 
-    # FIT METHOD ######################################################################################################
+    # FIT METHOD ------------------------------------------------------------------------------------------------------
 
     def _get_solver_names(self):
-        return self.penalization
+        return '_' + self.penalization
 
     def fit(self, x, y, group_index=None):
         """
@@ -733,7 +496,7 @@ class ASGL:
         """
         param = self._preprocessing()
         if self.penalization is None:
-            self.coef_ = self.unpenalized_solver(x=x, y=y)
+            self.coef_ = self._unpenalized(x=x, y=y)
         else:
             if self.parallel is False:
                 if self.penalization in ['lasso', 'alasso']:
@@ -744,7 +507,7 @@ class ASGL:
             else:
                 self.coef_ = self._parallel_execution(x=x, y=y, param=param, group_index=group_index)
 
-    # PREDICTION METHOD ###############################################################################################
+    # PREDICTION METHOD -----------------------------------------------------------------------------------------------
 
     def predict(self, x_new):
         """
@@ -762,7 +525,7 @@ class ASGL:
             prediction_list.append(np.dot(x_new, elt))
         return prediction_list
 
-    # NUMBER OF PARAMETERS ############################################################################################
+    # NUMBER OF PARAMETERS --------------------------------------------------------------------------------------------
 
     def _num_parameters(self):
         """
@@ -862,7 +625,7 @@ class ASGL:
         return result
 
 
-# ERROR CALCULATOR METHOD #############################################################################################
+# ERROR CALCULATOR METHOD ---------------------------------------------------------------------------------------------
 
 def _quantile_function(y_true, y_pred, tau):
     """
