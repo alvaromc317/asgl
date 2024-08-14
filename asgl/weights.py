@@ -1,11 +1,13 @@
 import logging
 import sys
-from sklearn.base import BaseEstimator
-from sklearn.utils.validation import check_X_y
+import warnings
+
 import numpy as np
+from sklearn.base import BaseEstimator
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 from sklearn.decomposition import SparsePCA
+from sklearn.utils.validation import check_X_y
 
 from .asgl import ASGL
 
@@ -64,6 +66,11 @@ class WEIGHTS(BaseEstimator):
     def __init__(self, model='lm', penalization='asgl', tau=0.5, weight_technique='pca_pct', weight_tol=1e-4,
                  lasso_power_weight=1, gl_power_weight=1, variability_pct=0.9, lambda1_weights=0.1, spca_alpha=1e-5,
                  spca_ridge_alpha=1e-2):
+        warnings.warn(
+            f"{self.__class__.__name__} is deprecated and will be removed in a future version. The class is still functional but we recommend you switch to the Regressor class, that bolsters the same functionality and full sklearn compatibility.",
+            DeprecationWarning,
+            stacklevel=2  # This ensures the warning points to the user's code
+        )
         self.valid_penalizations = ['alasso', 'agl', 'asgl']
         self.model = model
         self.penalization = penalization

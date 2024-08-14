@@ -1,11 +1,9 @@
-# NEW FILE
-
 import functools
 import itertools
 import logging
 import multiprocessing as mp
 import sys
-
+import warnings
 import cvxpy
 import numpy as np
 from sklearn.metrics import mean_absolute_error, median_absolute_error, mean_squared_error
@@ -65,6 +63,11 @@ class ASGL:
 
     def __init__(self, model='lm', penalization='lasso', intercept=True, tol=1e-5, lambda1=0.1, alpha=0.5, tau=0.5,
                  lasso_weights=None, gl_weights=None, parallel=False, num_cores=None, solver='default'):
+        warnings.warn(
+            f"{self.__class__.__name__} is deprecated and will be removed in a future version. The class is still functional but we recommend you switch to the Regressor class, that bolsters the same functionality and full sklearn compatibility.",
+            DeprecationWarning,
+            stacklevel=2  # This ensures the warning points to the user's code
+        )
         self.valid_models = ['lm', 'qr']
         self.valid_penalizations = ['lasso', 'gl', 'sgl', 'alasso', 'agl', 'asgl']
         self.model = model
