@@ -89,7 +89,7 @@ For users currently utilizing the `ASGL` class, we recommend switching
 to the `Regressor` class to ensure continued support and access to the
 latest functionalities.
 
-## Main parameters:
+## Key features:
 
 The `Regressor` class includes the following list of parameters:
 
@@ -212,9 +212,11 @@ genes are grouped into genetic pathways.
 
 For scenarios where the regressors have a known grouped structure, this
 information can be passed to the `Regressor` class during model fitting
-using the group_index parameter. The following example demonstrates this
-with a synthetic group_index. The model will be optimized using
-scikit-learn’s `RandomizedSearchCV` function.
+using the `group_index` parameter. This parameter is an array where each
+element indicates the group at which the associated variable belongs.
+The following example demonstrates this with a synthetic group_index.
+The model will be optimized using scikit-learn’s `RandomizedSearchCV`
+function.
 
 ``` python
 import numpy as np
@@ -239,6 +241,40 @@ rscv.fit(X_train, y_train, **{'group_index': group_index})
 This example demonstrates how to fit a quantile regression model with
 Adaptive Sparse Group Lasso penalization, utilizing scikit-learn’s
 `RandomizedSearchCV` to optimize the model’s hyperparameters.
+
+### Example 3: Customizing weights
+
+The `asgl` package offers several built-in methods for estimating
+adaptive weights, controlled via the `weight_technique` parameter. For
+more details onto the inners of each of these alternatives, refer to the
+[associated research
+paper](https://link.springer.com/article/10.1007/s11634-020-00413-8) or
+to the user guide. However, for users requiring extensive customization,
+the package allows for the direct specification of custom weights
+through the `individual_weights` and `group_weights` parameters. This
+allows the users to implement their own weight computation techniques
+and use them within the `asgl` framework.
+
+When using custom weights, ensure that the length of
+`individual_weights` matches the number of variables, and the length of
+`group_weights` matches the number of groups. Below is an example
+demonstrating how to fit a model with custom individual and group
+weights:
+
+``` python
+import numpy as np
+from asgl import Regressor
+
+# Generate custom weights
+custom_individual_weights = np.random.rand(X_train.shape[1])
+custom_group_weights = np.random.rand(len(np.unique(group_index)))
+
+# Create a Regressor object with custom weights
+model = Regressor(model='lm', penalization='asgl', individual_weights=custom_individual_weights, group_weights=custom_group_weights)
+
+# Fit the model
+model.fit(X_train, y_train, group_index=group_index)
+```
 
 ## Contributions
 
