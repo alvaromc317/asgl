@@ -28,6 +28,9 @@ class BaseModel(BaseEstimator, RegressorMixin):
     def _quantile_function(self, X):
         return 0.5 * cvxpy.abs(X) + (self.quantile - 0.5) * X
 
+    def _sigmoid(self, X):
+        return 1 / (1 + np.exp(-X))
+
     def _prepare_data(self, X, group_index=None):
         n, m = X.shape
         if group_index is not None:
@@ -44,6 +47,9 @@ class BaseModel(BaseEstimator, RegressorMixin):
             return (1.0 / y.shape[0]) * cvxpy.sum_squares(y - model_prediction)
         elif self.model == 'qr':
             return (1.0 / y.shape[0]) * cvxpy.sum(self._quantile_function(X=(y - model_prediction)))
+        elif self.model in ['logit', 'logit_raw', 'logit_proba']:
+            return (-1.0 / y.shape[0]) * cvxpy.sum(
+                cvxpy.multiply(y, model_prediction) - cvxpy.logistic(model_prediction))
         else:
             raise ValueError('Invalid value for model parameter.')
 
@@ -158,13 +164,19 @@ class BaseModel(BaseEstimator, RegressorMixin):
     def predict(self, X):
         if self.fit_intercept:
             X = np.c_[np.ones(X.shape[0]), X]
-        return np.dot(X, self.coef_)
+        predictions = np.dot(X, self.coef_)
+        if self.model == 'logit_proba':  # Compute probabilities in classification case
+            return self._sigmoid(predictions)
+        elif self.model == 'logit':
+            return (self._sigmoid(predictions) > 0.5).astype(int)  # Assign probabilities larger than 0.5 to class 1
+        else:
+            return predictions
 
 
 class AdaptiveWeights:
     def __init__(self, model='lm', penalization='alasso', quantile=0.5, weight_technique='pca_pct',
-                 individual_power_weight=1, group_power_weight=1, variability_pct=0.9, lambda1_weights=0.1, spca_alpha=1e-5,
-                 spca_ridge_alpha=1e-2,  individual_weights=None, group_weights=None, weight_tol=1e-4):
+                 individual_power_weight=1, group_power_weight=1, variability_pct=0.9, lambda1_weights=0.1,
+                 spca_alpha=1e-5, spca_ridge_alpha=1e-2, individual_weights=None, group_weights=None, weight_tol=1e-4):
         self.model = model
         self.penalization = penalization
         self.quantile = quantile
@@ -251,7 +263,8 @@ class AdaptiveWeights:
         """
         x_center = X - X.mean(axis=0)
         total_variance_in_x = np.sum(np.var(X, axis=0))
-        spca = SparsePCA(n_components=np.min((X.shape[0], X.shape[1])), alpha=self.spca_alpha, ridge_alpha=self.spca_ridge_alpha)
+        spca = SparsePCA(n_components=np.min((X.shape[0], X.shape[1])), alpha=self.spca_alpha,
+                         ridge_alpha=self.spca_ridge_alpha)
         t = spca.fit_transform(x_center)
         p = spca.components_.T
         # Obtain explained variance using spca as explained in the original paper (based on QR decomposition)
@@ -298,7 +311,9 @@ class AdaptiveWeights:
             if tmp_weight is None:
                 tmp_weight = getattr(self, '_w' + self.weight_technique)(X=X, y=y)
             unique_index = np.unique(group_index)
-            group_weights = [1 / (np.linalg.norm(tmp_weight[np.where(group_index == unique_index[i])[0]], 2) ** self.group_power_weight + self.weight_tol) for i in range(len(unique_index))]
+            group_weights = [1 / (np.linalg.norm(tmp_weight[np.where(group_index == unique_index[i])[0]],
+                                                 2) ** self.group_power_weight + self.weight_tol) for i in
+                             range(len(unique_index))]
             self.group_weights = np.asarray(group_weights)
         if bool_individual and (len(self.individual_weights) != X.shape[1]):
             raise ValueError('Number of individual weights does not match the number of columns in X')
@@ -375,6 +390,7 @@ class Regressor(BaseModel, AdaptiveWeights):
     weight_tol: float, default=1e-4
         Tolerance value used to avoid ZeroDivision errors when computing the weights.
     """
+
     def __init__(self, model='lm', penalization='lasso', quantile=0.5, fit_intercept=True, lambda1=0.1, alpha=0.5,
                  solver='default', weight_technique='pca_pct', individual_power_weight=1, group_power_weight=1,
                  variability_pct=0.9, lambda1_weights=0.1, spca_alpha=1e-5, spca_ridge_alpha=1e-2,
@@ -436,7 +452,7 @@ class Regressor(BaseModel, AdaptiveWeights):
             group_weights_param.value = self.lambda1 * self.group_weights
         for i in range(inf_lim, num_groups):
             model_prediction += X[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
-            group_penalization += cvxpy.sqrt(group_sizes[i]) * group_weights_param[i] * cvxpy.norm(beta_var[i],2)
+            group_penalization += cvxpy.sqrt(group_sizes[i]) * group_weights_param[i] * cvxpy.norm(beta_var[i], 2)
         objective_function = self._define_objective_function(y, model_prediction)
         problem = cvxpy.Problem(cvxpy.Minimize(objective_function + group_penalization))
         self._solve_problem(problem)
@@ -462,12 +478,13 @@ class Regressor(BaseModel, AdaptiveWeights):
         else:
             inf_lim = 0
             model_prediction = 0
-            group_weights_param.value = self.lambda1 * (1-self.alpha ) * self.group_weights
+            group_weights_param.value = self.lambda1 * (1 - self.alpha) * self.group_weights
             individual_weights_param.value = self.lambda1 * self.alpha * self.individual_weights
         for i in range(inf_lim, num_groups):
             model_prediction += X[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
             group_penalization += cvxpy.sqrt(group_sizes[i]) * group_weights_param[i] * cvxpy.norm(beta_var[i], 2)
-            individual_penalization += individual_weights_param[np.where(group_index == unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
+            individual_penalization += individual_weights_param[
+                                           np.where(group_index == unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
         objective_function = self._define_objective_function(y, model_prediction)
         problem = cvxpy.Problem(cvxpy.Minimize(objective_function + group_penalization + individual_penalization))
         self._solve_problem(problem)
@@ -478,7 +495,8 @@ class Regressor(BaseModel, AdaptiveWeights):
     def fit(self, X, y, group_index=None, sample_weight=None):
         X, y = check_X_y(X, y)
         if self.penalization in self.grouped_penalizations and group_index is None:
-            raise ValueError(f'The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.')
+            raise ValueError(f'The penalization provided requires fitting the model with a group_index parameter but '
+                             f'no group_index was detected.')
         if self.penalization is None:
             self.coef_ = self._unpenalized(X=X, y=y)
         elif self.penalization in self.non_adaptive_penalizations:
