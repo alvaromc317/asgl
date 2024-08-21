@@ -14,10 +14,11 @@ Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://cran.r-pr
 
 The `asgl` package is a versatile and robust tool designed for fitting a
 variety of regression models, including linear regression, quantile
-regression, and various penalized regression models such as Lasso, Group
-Lasso, Sparse Group Lasso, and their adaptive variants. The package is
-especially useful for simultaneous variable selection and prediction in
-both low and high-dimensional frameworks.
+regression, logistic regression and various penalized regression models
+such as Lasso, Ridge, Group Lasso, Sparse Group Lasso, and their
+adaptive variants. The package is especially useful for simultaneous
+variable selection and prediction in both low and high-dimensional
+frameworks.
 
 The primary class available to users is the `Regressor` class, which is
 detailed later in this document.
@@ -33,9 +34,11 @@ in the following papers:
 For a practical introduction to the package, users can refer to the user
 guide notebook available in the GitHub repository. Additional accessible
 explanations can be found on [Towards Data Science: Sparse Group
-Lasso](https://towardsdatascience.com/sparse-group-lasso-in-python-255e379ab892)
-and [Towards Data Science: Adaptive
-Lasso](https://towardsdatascience.com/an-adaptive-lasso-63afca54b80d).
+Lasso](https://towardsdatascience.com/sparse-group-lasso-in-python-255e379ab892),
+[Towards Data Science: Adaptive
+Lasso](https://towardsdatascience.com/an-adaptive-lasso-63afca54b80d)
+and [Towards Data Science: Quantile
+regression](https://towardsdatascience.com/squashing-the-average-a-dive-into-penalized-quantile-regression-for-python-8f3a996768b6).
 
 ## Dependencies
 
@@ -61,6 +64,20 @@ directory (you will need to have `pytest >= 7.1.2` installed) by runnig:
     pytest
 
 ## What’s new?
+
+### 2.1.0
+
+The latest release of the `asgl` package, version 2.1.0, introduces
+powerful enhancements for logistic regression models. Users can now
+easily tackle binary classification problems by setting `model='logit'`.
+For more granular control, specify `model='logit_raw'` to retrieve
+outputs before logistic transformation, or `model='logit_proba'` for
+probability outputs. Additionally, this update includes the
+implementation of ridge and adaptive ridge penalizations, accessible via
+`penalization='ridge'` or `'aridge'`, allowing for more flexible model
+tuning.
+
+### 2.0.0
 
 With the release of version 2.0, the `asgl` package has undergone
 significant enhancements and improvements. The most notable change is
@@ -91,16 +108,22 @@ latest functionalities.
 
 ## Key features:
 
-The `Regressor` class includes the following list of parameters:
+The `Regressor` class includes the following list of parameters: - ‘lm’:
+linear regression models. - ‘qr’: quantile regression models. - . - -
+transformation.
 
 - model: str, default=‘lm’
-  - Type of model to fit. Options are ‘lm’ (linear regression) and ‘qr’
-    (quantile regression).
+  - Type of model to fit. Options are ‘lm’ (linear regression), ‘qr’
+    (quantile regression), ‘logit’ (logistic regression for binary
+    classification, output binary classification), ‘logit_proba’
+    (logistic regression for binary classification, output probability)
+    and ‘logit_raw’ (logistic regression for binary classification,
+    output score before logistic).
 - penalization: str or None, default=‘lasso’
-  - Type of penalization to use. Options are ‘lasso’, ‘gl’ (group
-    lasso), ‘sgl’ (sparse group lasso), ‘alasso’ (adaptive lasso), ‘agl’
-    (adaptive group lasso), ‘asgl’ (adaptive sparse group lasso), or
-    None.
+  - Type of penalization to use. Options are ‘lasso’, ‘ridge’, ‘gl’
+    (group lasso), ‘sgl’ (sparse group lasso), ‘alasso’ (adaptive
+    lasso), ‘aridge’, ‘agl’ (adaptive group lasso), ‘asgl’ (adaptive
+    sparse group lasso), or None.
 - quantile: float, default=0.5
   - Quantile level for quantile regression models. Valid values are
     between 0 and 1.
@@ -121,12 +144,12 @@ The `Regressor` class includes the following list of parameters:
     command `cvxpy.installed_solvers()`.
 - weight_technique: str, default=‘pca_pct’
   - Technique used to fit adaptive weights. Options include ‘pca_1’,
-    ‘pca_pct’, ‘pls_1’, ‘pls_pct’, ‘lasso’, ‘unpenalized’, and
+    ‘pca_pct’, ‘pls_1’, ‘pls_pct’, ‘lasso’, ‘ridge’, ‘unpenalized’, and
     ‘sparse_pca’. For low dimensional problems (where the number of
     variables is smaller than the number of observations) the usage of
-    the ‘unpenalized’ weight_technique alternative is encouraged. For
+    the ‘unpenalized’ or ‘ridge’ weight_techniques is encouraged. For
     high dimensional problems (where the number of variables is larger
-    than the number of observations) the default alternative is
+    than the number of observations) the default ‘pca_pct’ is
     encouraged.
 - individual_power_weight: float, default=1
   - Power to which individual weights are raised. This parameter only
@@ -173,7 +196,7 @@ The `Regressor` class includes the following list of parameters:
 
 ## Examples
 
-### Example 1: Linear Regression with Lasso Penalization.
+### Example 1: Linear Regression with Lasso.
 
 ``` python
 from sklearn.datasets import make_regression
@@ -201,7 +224,7 @@ This example illustrates how to:
 - Make predictions on the test data.
 - Evaluate the model’s performance using mean squared error.
 
-### Example 2: Quantile regression with Adaptive Sparse Group Lasso penalization.
+### Example 2: Quantile regression with Adaptive Sparse Group Lasso.
 
 Group-based penalizations like Group Lasso, Sparse Group Lasso, and
 their adaptive variants, assume that there is a group structure within
@@ -222,7 +245,6 @@ function.
 import numpy as np
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import RandomizedSearchCV
 from asgl import Regressor
 
@@ -242,7 +264,63 @@ This example demonstrates how to fit a quantile regression model with
 Adaptive Sparse Group Lasso penalization, utilizing scikit-learn’s
 `RandomizedSearchCV` to optimize the model’s hyperparameters.
 
-### Example 3: Customizing weights
+### Example 3: Logistic regression
+
+In binary classification tasks using logistic regression, the default
+decision threshold of 0.5 is used by default. But it might not always
+yield the best accuracy. By leveraging the `'logit_proba'` model from
+the `asgl` package, you can obtain predicted probabilities and use them
+to find an optimal threshold that maximizes classification accuracy.
+This example demonstrates how to use `cross_val_predict` from
+scikit-learn to evaluate different thresholds and select the one that
+offers the highest accuracy for your classification model.
+
+``` python
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split, cross_val_predict
+from sklearn.metrics import accuracy_score, precision_recall_curve
+from asgl import Regressor
+import matplotlib.pyplot as plt
+
+X, y = make_classification(n_samples=1000, n_features=100, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+# Create a Regressor object for logistic regression to output probabilities
+model = Regressor(model='logit_proba', penalization='ridge')
+
+# Use cross_val_predict to get probability estimates for each fold
+probabilities = cross_val_predict(model, X_train, y_train, method='predict', cv=5)
+#> C:\Users\alvar\ONEDRI~1\Trabajo\Investigacion\asgl\venv\Lib\site-packages\cvxpy\problems\problem.py:1407: UserWarning: Solution may be inaccurate. Try another solver, adjusting the solver settings, or solve with verbose=True for more information.
+#>   warnings.warn(
+
+thresholds = np.linspace(0.01, 0.99, 100)
+
+# Calculate accuracy for each threshold
+accuracies = []
+for threshold in thresholds:
+    predictions = (probabilities >= threshold).astype(int)
+    accuracies.append(accuracy_score(y_train, predictions))
+```
+
+``` python
+plt.plot(thresholds, accuracies)
+plt.title('Accuracy vs Threshold')
+plt.ylabel('Accuracy')
+plt.xlabel('Threshold')
+```
+
+<img src="figures/README-unnamed-chunk-4-1.png" width="100%" />
+
+``` python
+optimal_threshold = thresholds[np.argmax(accuracies)]
+model.fit(X_train, y_train)
+test_probabilities = model.predict(X_test)
+test_predictions = (test_probabilities >= optimal_threshold).astype(int)
+test_accuracy = accuracy_score(y_test, test_predictions)
+```
+
+### Example 4: Customizing weights for adaptive sparse group lasso
 
 The `asgl` package offers several built-in methods for estimating
 adaptive weights, controlled via the `weight_technique` parameter. For

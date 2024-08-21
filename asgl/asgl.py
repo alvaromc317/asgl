@@ -379,7 +379,7 @@ class ASGL:
         model_prediction = x @ beta_var
         objective_function = self._define_objective_function(y, model_prediction)
         init_pen = 1 if self.intercept else 0
-        lasso_penalization = cvxpy.norm(l_weights_param[init_pen:].T @ cvxpy.abs(beta_var[init_pen:]), 1)
+        lasso_penalization = l_weights_param[init_pen:].T @ cvxpy.abs(beta_var[init_pen:])
         problem = cvxpy.Problem(cvxpy.Minimize(objective_function + lasso_penalization))
         beta_sol_list = []
         for lam, lw in param:

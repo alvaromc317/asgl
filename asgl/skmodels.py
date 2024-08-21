@@ -1,11 +1,12 @@
 import warnings
+
 import cvxpy
 import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.utils import check_X_y
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 from sklearn.decomposition import SparsePCA
+from sklearn.utils import check_X_y
 
 
 class BaseModel(BaseEstimator, RegressorMixin):
@@ -21,8 +22,8 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self.tol = tol
         self.coef_ = None
         self.solver_stats = None
-        self.non_adaptive_penalizations = ['lasso', 'gl', 'sgl']
-        self.adaptive_penalizations = ['alasso', 'agl', 'asgl']
+        self.non_adaptive_penalizations = ['lasso', 'ridge', 'gl', 'sgl']
+        self.adaptive_penalizations = ['alasso', 'aridge', 'agl', 'asgl']
         self.grouped_penalizations = ['gl', 'agl', 'sgl', 'asgl']
 
     def _quantile_function(self, X):
@@ -48,8 +49,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
         elif self.model == 'qr':
             return (1.0 / y.shape[0]) * cvxpy.sum(self._quantile_function(X=(y - model_prediction)))
         elif self.model in ['logit', 'logit_raw', 'logit_proba']:
-            return (-1.0 / y.shape[0]) * cvxpy.sum(
-                cvxpy.multiply(y, model_prediction) - cvxpy.logistic(model_prediction))
+            return (-1.0 / y.shape[0]) * cvxpy.sum(cvxpy.multiply(y - 1, model_prediction) - cvxpy.logistic(-model_prediction))
         else:
             raise ValueError('Invalid value for model parameter.')
 
@@ -77,8 +77,23 @@ class BaseModel(BaseEstimator, RegressorMixin):
         beta_var = cvxpy.Variable(m)
         model_prediction = X @ beta_var
         objective_function = self._define_objective_function(y, model_prediction)
-        penalization = 0
-        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + penalization))
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function))
+        self._solve_problem(problem)
+        beta_sol = beta_var.value
+        beta_sol[np.abs(beta_sol) < self.tol] = 0
+        return beta_sol
+
+    def _ridge(self, X, y, group_index):
+        X, m, _ = self._prepare_data(X)
+        beta_var = cvxpy.Variable(m)
+        model_prediction = X @ beta_var
+        objective_function = self._define_objective_function(y, model_prediction)
+        lambda_param = cvxpy.Parameter(nonneg=True, value=self.lambda1)
+        if self.fit_intercept:
+            individual_penalization = lambda_param * cvxpy.sum_squares(beta_var[1:])
+        else:
+            individual_penalization = lambda_param * cvxpy.sum_squares(beta_var)
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + individual_penalization))
         self._solve_problem(problem)
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
@@ -288,10 +303,16 @@ class AdaptiveWeights:
         tmp_weight = np.abs(lasso_model.coef_[1:])
         return tmp_weight
 
+    def _wridge(self, X, y):
+        ridge_model = BaseModel(model=self.model, penalization='ridge', lambda1=self.lambda1_weights, fit_intercept=True, quantile=self.quantile)
+        ridge_model.fit(X=X, y=y)
+        tmp_weight = np.abs(ridge_model.coef_[1:])
+        return tmp_weight
+
     def _check_type_penalization(self):
         bool_individual = False
         bool_group = False
-        if self.penalization in ['alasso', 'asgl']:
+        if self.penalization in ['alasso', 'asgl', 'aridge']:
             bool_individual = True
         if self.penalization in ['agl', 'asgl']:
             bool_group = True
@@ -329,15 +350,20 @@ class Regressor(BaseModel, AdaptiveWeights):
         Model to be fit. Currently, accepts:
             - 'lm': linear regression models.
             - 'qr': quantile regression models.
+            - 'logit': logistic regression for binary classification, output binary classification.
+            - 'logit_proba': logistic regression for binary classification, output probability.
+            - 'logit_raw': logistic regression for binary classification, output score before logistic transformation.
     penalization: str or None, default = 'lasso'
         Penalization to use. Currently, accepts:
             - None: unpenalized model.
-            - 'lasso': lasso model.
-            - 'gl': group lasso model.
-            - 'sgl': sparse group lasso model.
-            - 'alasso': adaptive lasso model.
-            - 'agl': adaptive group lasso model.
-            - 'asgl': adaptive sparse group lasso model.
+            - 'lasso': lasso penalization.
+            - 'ridge': ridge penalization.
+            - 'gl': group lasso penalization.
+            - 'sgl': sparse group lasso penalization.
+            - 'alasso': adaptive lasso penalization.
+            - 'aridge': adaptive ridge penalization.
+            - 'agl': adaptive group lasso penalization.
+            - 'asgl': adaptive sparse group lasso penalization.
     quantile: float, defaul=0.5
         quantile level in quantile regression models. Valid values are between 0 and 1. It only has effect if
         ``model='qr'``
@@ -347,8 +373,8 @@ class Regressor(BaseModel, AdaptiveWeights):
         Constant that multiplies the penalization, controlling the strength. Must be a non-negative float
         i.e. in `[0, inf)`. Larger values will result in larger penalizations.
     alpha: float, default=0.5
-        Constant that performs tradeoff between individual and group penalizations in sgl and asgl penalizations.
-        ``alpha=1`` enforces a lasso penalization while ``alpha=0`` enforces a group lasso penalization.
+        Constant that performs tradeoff between lasso and group lasso in sgl and asgl penalizations.
+        ``alpha=1`` enforces a lasso while ``alpha=0`` enforces a group lasso.
     solver: str, defaul='defaul'
         Solver to be used by CVXPY. Default uses optimal alternative depending on the problem.
         Users can check available solvers via the command `cvxpy.installed_solvers()`.
@@ -361,6 +387,7 @@ class Regressor(BaseModel, AdaptiveWeights):
             - pls_pct:  Builds the weights using as many components from PLS as indicated to achieve the
             ``variability_pct``.
             - lasso: Builds the weights using the lasso model.
+            - ridge: Builds the weights using the ridge model.
             - unpenalized: Builds the weights using the unpenalized model.
             - sparse_pca: Similar to 'pca_pct' but it builds the weights using sparse PCA components.
     individual_power_weight: float, default=1
@@ -371,7 +398,8 @@ class Regressor(BaseModel, AdaptiveWeights):
         Percentage of variability explained by pca, pls and sparse_pca components. It only has effect if
         `` weight_technique`` is one of the following: 'pca_pct', 'pls_pct', 'sparse_pca'.
     lambda1_weights: float, default=0.1
-        The value of the parameter ``lambda1`` used to solve the lasso model if ``weight_technique='lasso'``
+        The value of the parameter ``lambda1`` used to solve the lasso model if ``weight_technique='lasso'`` or
+        the ridge if ``weight_technique='ridge'``
     spca_alpha: float, default=1e-5
         sparse PCA parameter. See sklearn implementation of sparse PCA for more details.
     spca_ridge_alpha: float, default=1e-2
@@ -415,6 +443,26 @@ class Regressor(BaseModel, AdaptiveWeights):
         self.group_weights = group_weights
         self.weight_tol = weight_tol
 
+    def _aridge(self, X, y, group_index):
+        X, m, _ = self._prepare_data(X)
+        beta_var = cvxpy.Variable(m)
+        model_prediction = X @ beta_var
+        objective_function = self._define_objective_function(y, model_prediction)
+        individual_weights_param = cvxpy.Parameter(m, nonneg=True)
+        if self.fit_intercept:
+            init_pen = 1
+            individual_weights_param.value = np.sqrt(self.lambda1 * np.insert(self.individual_weights, 0, 0))
+        else:
+            init_pen = 0
+            individual_weights_param.value = np.sqrt(self.lambda1 * self.individual_weights)
+        individual_penalization = cvxpy.sum_squares(cvxpy.multiply(individual_weights_param[init_pen:], beta_var[init_pen:]))
+        problem = cvxpy.Problem(cvxpy.Minimize(objective_function + individual_penalization))
+        self._solve_problem(problem)
+        beta_sol = beta_var.value
+        beta_sol[np.abs(beta_sol) < self.tol] = 0
+        return beta_sol
+
+
     def _alasso(self, X, y, group_index):
         X, m, _ = self._prepare_data(X)
         beta_var = cvxpy.Variable(m)
@@ -427,7 +475,7 @@ class Regressor(BaseModel, AdaptiveWeights):
         else:
             init_pen = 0
             individual_weights_param.value = self.lambda1 * self.individual_weights
-        individual_penalization = cvxpy.norm(individual_weights_param[init_pen:].T @ cvxpy.abs(beta_var[init_pen:]), 1)
+        individual_penalization = individual_weights_param[init_pen:].T @ cvxpy.abs(beta_var[init_pen:])
         problem = cvxpy.Problem(cvxpy.Minimize(objective_function + individual_penalization))
         self._solve_problem(problem)
         beta_sol = beta_var.value
@@ -473,8 +521,8 @@ class Regressor(BaseModel, AdaptiveWeights):
         if self.fit_intercept:
             inf_lim = 1
             model_prediction = X[:, np.where(group_index == unique_group_index[0])[0]] @ beta_var[0]
-            group_weights_param.value = self.lambda1 * np.insert(self.group_weights, 0, 0)
-            individual_weights_param.value = self.lambda1 * np.insert(self.individual_weights, 0, 0)
+            group_weights_param.value = self.lambda1 * (1 - self.alpha) * np.insert(self.group_weights, 0, 0)
+            individual_weights_param.value = self.lambda1 * self.alpha * np.insert(self.individual_weights, 0, 0)
         else:
             inf_lim = 0
             model_prediction = 0
@@ -483,8 +531,7 @@ class Regressor(BaseModel, AdaptiveWeights):
         for i in range(inf_lim, num_groups):
             model_prediction += X[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
             group_penalization += cvxpy.sqrt(group_sizes[i]) * group_weights_param[i] * cvxpy.norm(beta_var[i], 2)
-            individual_penalization += individual_weights_param[
-                                           np.where(group_index == unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
+            individual_penalization += individual_weights_param[np.where(group_index == unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
         objective_function = self._define_objective_function(y, model_prediction)
         problem = cvxpy.Problem(cvxpy.Minimize(objective_function + group_penalization + individual_penalization))
         self._solve_problem(problem)
