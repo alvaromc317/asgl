@@ -108,9 +108,7 @@ latest functionalities.
 
 ## Key features:
 
-The `Regressor` class includes the following list of parameters: - ‘lm’:
-linear regression models. - ‘qr’: quantile regression models. - . - -
-transformation.
+The `Regressor` class includes the following list of parameters:
 
 - model: str, default=‘lm’
   - Type of model to fit. Options are ‘lm’ (linear regression), ‘qr’
