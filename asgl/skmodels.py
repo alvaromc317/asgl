@@ -11,7 +11,7 @@ from sklearn.utils import check_X_y
 
 class BaseModel(BaseEstimator, RegressorMixin):
     def __init__(self, model='lm', penalization='lasso', quantile=0.5, fit_intercept=True, lambda1=0.1, alpha=0.5,
-                 solver='default', tol=1e-5):
+                 solver='default', tol=1e-3):
         self.model = model
         self.penalization = penalization
         self.quantile = quantile
@@ -21,6 +21,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self.solver = solver
         self.tol = tol
         self.coef_ = None
+        self.intercept_ = None
         self.solver_stats = None
         self.non_adaptive_penalizations = ['lasso', 'ridge', 'gl', 'sgl']
         self.adaptive_penalizations = ['alasso', 'aridge', 'agl', 'asgl']
@@ -43,13 +44,21 @@ class BaseModel(BaseEstimator, RegressorMixin):
                 group_index = np.append(0, group_index)
         return X, m, group_index
 
+    def _split_beta_sol(self, beta_sol):
+        if self.fit_intercept:
+            self.intercept_ = beta_sol[0]
+            self.coef_ = beta_sol[1:]
+        else:
+            self.coef_ = beta_sol
+
     def _define_objective_function(self, y, model_prediction):
         if self.model == 'lm':
             return (1.0 / y.shape[0]) * cvxpy.sum_squares(y - model_prediction)
         elif self.model == 'qr':
             return (1.0 / y.shape[0]) * cvxpy.sum(self._quantile_function(X=(y - model_prediction)))
         elif self.model in ['logit', 'logit_raw', 'logit_proba']:
-            return (-1.0 / y.shape[0]) * cvxpy.sum(cvxpy.multiply(y - 1, model_prediction) - cvxpy.logistic(-model_prediction))
+            return (-1.0 / y.shape[0]) * cvxpy.sum(
+                cvxpy.multiply(y - 1, model_prediction) - cvxpy.logistic(-model_prediction))
         else:
             raise ValueError('Invalid value for model parameter.')
 
@@ -60,7 +69,8 @@ class BaseModel(BaseEstimator, RegressorMixin):
             else:
                 problem.solve(solver=self.solver)
         except (ValueError, cvxpy.error.SolverError):
-            warnings.warn(f'Solver {self.solver} failed. Using alternative options from {cvxpy.installed_solvers()}', Warning, stacklevel=2)
+            warnings.warn(f'Solver {self.solver} failed. Using alternative options from {cvxpy.installed_solvers()}',
+                          Warning, stacklevel=2)
             for alt_solver in cvxpy.installed_solvers():
                 try:
                     problem.solve(solver=alt_solver)
@@ -81,6 +91,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._solve_problem(problem)
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def _ridge(self, X, y, group_index):
@@ -97,6 +108,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._solve_problem(problem)
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def _lasso(self, X, y, group_index):
@@ -113,6 +125,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._solve_problem(problem)
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def _gl(self, X, y, group_index):
@@ -136,6 +149,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._solve_problem(problem)
         beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def _sgl(self, X, y, group_index):
@@ -163,23 +177,29 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._solve_problem(problem)
         beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def fit(self, X, y, group_index=None, sample_weight=None):
         X, y = check_X_y(X, y)
         if self.penalization in self.grouped_penalizations and group_index is None:
-            raise ValueError(f'The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.')
+            raise ValueError(
+                f'The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.')
         if self.penalization is None:
-            self.coef_ = self._unpenalized(X=X, y=y)
+            beta_sol = self._unpenalized(X=X, y=y)
+            self._split_beta_sol(beta_sol)
         elif self.penalization in self.non_adaptive_penalizations:
-            self.coef_ = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
+            beta_sol = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
+            self._split_beta_sol(beta_sol)
         else:
             raise ValueError('Invalid value for penalization parameter.')
+        return self
 
     def predict(self, X):
+        intercept = 0
         if self.fit_intercept:
-            X = np.c_[np.ones(X.shape[0]), X]
-        predictions = np.dot(X, self.coef_)
+            intercept = self.intercept_
+        predictions = np.dot(X, self.coef_) + intercept
         if self.model == 'logit_proba':  # Compute probabilities in classification case
             return self._sigmoid(predictions)
         elif self.model == 'logit':
@@ -213,6 +233,7 @@ class AdaptiveWeights:
         pca = PCA(n_components=1)
         pca.fit(X)
         tmp_weight = np.abs(pca.components_).flatten()
+        tmp_weight = np.round(tmp_weight, 4)
         return tmp_weight
 
     def _wpca_pct(self, X, y):
@@ -231,19 +252,20 @@ class AdaptiveWeights:
         p = pca.components_.T
         unpenalized_model = BaseModel(model=self.model, penalization=None, fit_intercept=True, quantile=self.quantile)
         unpenalized_model.fit(X=t, y=y)
-        beta_sol = unpenalized_model.coef_[1:]  # Remove intercept
+        beta_sol = unpenalized_model.coef_
         # Recover an estimation of the beta parameters and use it as weight
         tmp_weight = np.abs(np.dot(p, beta_sol)).flatten()
+        tmp_weight = np.round(tmp_weight, 4)
         return tmp_weight
 
     def _wpls_1(self, X, y):
         """
         Weights based on the first partial least squares component
         """
-        # x_loadings_ is the pls equivalent to the PCs
         pls = PLSRegression(n_components=1, scale=False)
         pls.fit(X, y)
         tmp_weight = np.abs(pls.x_rotations_).flatten()
+        tmp_weight = np.round(tmp_weight, 4)
         return tmp_weight
 
     def _wpls_pct(self, X, y):
@@ -261,15 +283,7 @@ class AdaptiveWeights:
         pls = PLSRegression(n_components=n_comp, scale=False)
         pls.fit(X, y)
         tmp_weight = np.abs(np.asarray(pls.coef_).flatten())
-        return tmp_weight
-
-    def _wunpenalized(self, X, y):
-        """
-        Only for low dimensional frameworks. Weights based on an unpenalized regression model
-        """
-        unpenalized_model = BaseModel(model=self.model, penalization=None, fit_intercept=True, quantile=self.quantile)
-        unpenalized_model.fit(X=X, y=y)
-        tmp_weight = np.abs(unpenalized_model.coef_[1:])  # Remove intercept
+        tmp_weight = np.round(tmp_weight, 4)
         return tmp_weight
 
     def _wsparse_pca(self, X, y):
@@ -292,21 +306,36 @@ class AdaptiveWeights:
         n_comp = np.argmax(fractions_of_explained_variance >= self.variability_pct) + 1
         unpenalized_model = BaseModel(model=self.model, penalization=None, fit_intercept=True, quantile=self.quantile)
         unpenalized_model.fit(X=t[:, 0:n_comp], y=y)
-        beta_sol = unpenalized_model.coef_[1:]
+        beta_sol = unpenalized_model.coef_
         # Recover an estimation of the beta parameters and use it as weight
         tmp_weight = np.abs(np.dot(p[:, 0:n_comp], beta_sol)).flatten()
+        tmp_weight = np.round(tmp_weight, 4)
+        return tmp_weight
+
+    def _wunpenalized(self, X, y):
+        """
+        Only for low dimensional frameworks. Weights based on an unpenalized regression model
+        """
+        unpenalized_model = BaseModel(model=self.model, penalization=None, fit_intercept=True, quantile=self.quantile)
+        unpenalized_model.fit(X=X, y=y)
+        tmp_weight = np.abs(unpenalized_model.coef_)
+        tmp_weight = np.round(tmp_weight, 4)
         return tmp_weight
 
     def _wlasso(self, X, y):
-        lasso_model = BaseModel(model=self.model, penalization='lasso', lambda1=self.lambda1_weights, fit_intercept=True, quantile=self.quantile)
+        lasso_model = BaseModel(model=self.model, penalization='lasso', lambda1=self.lambda1_weights,
+                                fit_intercept=True, quantile=self.quantile)
         lasso_model.fit(X=X, y=y)
-        tmp_weight = np.abs(lasso_model.coef_[1:])
+        tmp_weight = np.abs(lasso_model.coef_)
+        tmp_weight = np.round(tmp_weight, 4)
         return tmp_weight
 
     def _wridge(self, X, y):
-        ridge_model = BaseModel(model=self.model, penalization='ridge', lambda1=self.lambda1_weights, fit_intercept=True, quantile=self.quantile)
+        ridge_model = BaseModel(model=self.model, penalization='ridge', lambda1=self.lambda1_weights,
+                                fit_intercept=True, quantile=self.quantile)
         ridge_model.fit(X=X, y=y)
-        tmp_weight = np.abs(ridge_model.coef_[1:])
+        tmp_weight = np.abs(ridge_model.coef_)
+        tmp_weight = np.round(tmp_weight, 4)
         return tmp_weight
 
     def _check_type_penalization(self):
@@ -412,17 +441,24 @@ class Regressor(BaseModel, AdaptiveWeights):
         An array containing the values of group weights in adaptive penalizations. If this parameter is informed,
         it overrides the weight estimation process defined by parameter ``weight_technique``. and allows the user to
         provide custom weights.
-    tol: float, default=1e-4
+    tol: float, default=1e-3
         The tolerance for a coefficient in the model to be considered as 0. Values smaller than ``tol`` are assumed to
         be 0.
     weight_tol: float, default=1e-4
         Tolerance value used to avoid ZeroDivision errors when computing the weights.
+
+    Attributes
+    ----------
+    coef_: ndarray of shape (n_features,)
+        Estimated coefficients for the regression problem.
+    intercept_: float
+        Independent term in the regression model
     """
 
     def __init__(self, model='lm', penalization='lasso', quantile=0.5, fit_intercept=True, lambda1=0.1, alpha=0.5,
                  solver='default', weight_technique='pca_pct', individual_power_weight=1, group_power_weight=1,
                  variability_pct=0.9, lambda1_weights=0.1, spca_alpha=1e-5, spca_ridge_alpha=1e-2,
-                 individual_weights=None, group_weights=None, weight_tol=1e-4, tol=1e-4):
+                 individual_weights=None, group_weights=None, weight_tol=1e-4, tol=1e-3):
         super().__init__(
             model=model,
             penalization=penalization,
@@ -455,13 +491,14 @@ class Regressor(BaseModel, AdaptiveWeights):
         else:
             init_pen = 0
             individual_weights_param.value = np.sqrt(self.lambda1 * self.individual_weights)
-        individual_penalization = cvxpy.sum_squares(cvxpy.multiply(individual_weights_param[init_pen:], beta_var[init_pen:]))
+        individual_penalization = cvxpy.sum_squares(
+            cvxpy.multiply(individual_weights_param[init_pen:], beta_var[init_pen:]))
         problem = cvxpy.Problem(cvxpy.Minimize(objective_function + individual_penalization))
         self._solve_problem(problem)
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
-
 
     def _alasso(self, X, y, group_index):
         X, m, _ = self._prepare_data(X)
@@ -480,6 +517,7 @@ class Regressor(BaseModel, AdaptiveWeights):
         self._solve_problem(problem)
         beta_sol = beta_var.value
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def _agl(self, X, y, group_index):
@@ -506,6 +544,7 @@ class Regressor(BaseModel, AdaptiveWeights):
         self._solve_problem(problem)
         beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def _asgl(self, X, y, group_index):
@@ -531,12 +570,14 @@ class Regressor(BaseModel, AdaptiveWeights):
         for i in range(inf_lim, num_groups):
             model_prediction += X[:, np.where(group_index == unique_group_index[i])[0]] @ beta_var[i]
             group_penalization += cvxpy.sqrt(group_sizes[i]) * group_weights_param[i] * cvxpy.norm(beta_var[i], 2)
-            individual_penalization += individual_weights_param[np.where(group_index == unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
+            individual_penalization += individual_weights_param[
+                                           np.where(group_index == unique_group_index[i])[0]].T @ cvxpy.abs(beta_var[i])
         objective_function = self._define_objective_function(y, model_prediction)
         problem = cvxpy.Problem(cvxpy.Minimize(objective_function + group_penalization + individual_penalization))
         self._solve_problem(problem)
         beta_sol = np.concatenate([b.value for b in beta_var], axis=0)
         beta_sol[np.abs(beta_sol) < self.tol] = 0
+        beta_sol = np.round(beta_sol, 4)
         return beta_sol
 
     def fit(self, X, y, group_index=None, sample_weight=None):
@@ -545,11 +586,14 @@ class Regressor(BaseModel, AdaptiveWeights):
             raise ValueError(f'The penalization provided requires fitting the model with a group_index parameter but '
                              f'no group_index was detected.')
         if self.penalization is None:
-            self.coef_ = self._unpenalized(X=X, y=y)
+            beta_sol = self._unpenalized(X=X, y=y)
+            self._split_beta_sol(beta_sol)
         elif self.penalization in self.non_adaptive_penalizations:
-            self.coef_ = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
+            beta_sol = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
+            self._split_beta_sol(beta_sol)
         elif self.penalization in self.adaptive_penalizations:
             self.fit_weights(X=X, y=y, group_index=group_index)
-            self.coef_ = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
+            beta_sol = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
+            self._split_beta_sol(beta_sol)
         else:
             raise ValueError('Invalid value for penalization parameter.')

@@ -8,7 +8,7 @@
 [![License: GPL
 v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Package
-Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://cran.r-project.org/package=asgl)
+Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](https://cran.r-project.org/package=asgl)
 
 ## Introduction
 
@@ -64,6 +64,11 @@ directory (you will need to have `pytest >= 7.1.2` installed) by runnig:
     pytest
 
 ## What’s new?
+
+### 2.1.1
+
+Now the intercept term appears in the `intercept_` attribute instead of
+being part of the `coef_` attribute.
 
 ### 2.1.0
 
@@ -351,6 +356,52 @@ model = Regressor(model='lm', penalization='asgl', individual_weights=custom_ind
 # Fit the model
 model.fit(X_train, y_train, group_index=group_index)
 ```
+
+### Example 5: Comparison of lasso and adaptive lasso
+
+This example compares an implementation of lasso as available in
+`scikit-learn` against an adaptive lasso model built using the `asgl`
+library. Both models are optimized using 5-fold cross validation on a
+grid of hyper parameters, but ass demonstrated by the final MSEs
+computed on the test set, the adaptive lasso reduces by half the error
+compared to lasso.
+
+``` python
+import numpy as np
+from sklearn.linear_model import Lasso
+from sklearn.datasets import make_regression
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import GridSearchCV, train_test_split
+from asgl import Regressor
+
+X, y = make_regression(n_samples=200, n_features=200, n_informative=25, bias=10, noise=5, random_state=42)
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=50, random_state=42)
+
+param_grid = {'alpha': 10 ** np.arange(-2, 1.51, 0.1)}
+
+lasso_model = Lasso()
+
+gscv_lasso = GridSearchCV(lasso_model, param_grid, scoring='neg_mean_squared_error', cv=5, n_jobs=-1)
+gscv_lasso.fit(X_train, y_train)
+lasso_predictions = gscv_lasso.predict(X_test)
+lasso_mse = np.round(mean_squared_error(lasso_predictions, y_test), 3)
+print(f"Lasso MSE: {lasso_mse}")
+
+
+param_grid = {'lambda1': 10 ** np.arange(-2, 1.51, 0.1)}
+
+alasso_model = Regressor(model='lm', penalization='alasso', weight_technique='lasso')
+
+gscv_alasso = GridSearchCV(alasso_model, param_grid, scoring='neg_mean_squared_error', cv=5, n_jobs=-1)
+gscv_alasso.fit(X_train, y_train)
+alasso_predictions = gscv_alasso.predict(X_test)
+alasso_mse = np.round(mean_squared_error(alasso_predictions, y_test), 3)
+print(f"Adaptive lasso MSE: {alasso_mse}")
+```
+
+    Lasso MSE: 59.693
+    Adaptive lasso MSE: 35.085
 
 ## Contributions
 
