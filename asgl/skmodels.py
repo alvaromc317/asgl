@@ -8,6 +8,10 @@ from sklearn.decomposition import PCA
 from sklearn.decomposition import SparsePCA
 from sklearn.utils import check_X_y
 
+non_adaptive_penalizations = ['lasso', 'ridge', 'gl', 'sgl']
+adaptive_penalizations = ['alasso', 'aridge', 'agl', 'asgl']
+grouped_penalizations = ['gl', 'agl', 'sgl', 'asgl']
+
 
 class BaseModel(BaseEstimator, RegressorMixin):
     def __init__(self, model='lm', penalization='lasso', quantile=0.5, fit_intercept=True, lambda1=0.1, alpha=0.5,
@@ -20,12 +24,6 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self.alpha = alpha
         self.solver = solver
         self.tol = tol
-        self.coef_ = None
-        self.intercept_ = None
-        self.solver_stats = None
-        self.non_adaptive_penalizations = ['lasso', 'ridge', 'gl', 'sgl']
-        self.adaptive_penalizations = ['alasso', 'aridge', 'agl', 'asgl']
-        self.grouped_penalizations = ['gl', 'agl', 'sgl', 'asgl']
 
     def _quantile_function(self, X):
         return 0.5 * cvxpy.abs(X) + (self.quantile - 0.5) * X
@@ -182,13 +180,14 @@ class BaseModel(BaseEstimator, RegressorMixin):
 
     def fit(self, X, y, group_index=None, sample_weight=None):
         X, y = check_X_y(X, y)
-        if self.penalization in self.grouped_penalizations and group_index is None:
+        self.n_features_in_ = X.shape[1]
+        if self.penalization in grouped_penalizations and group_index is None:
             raise ValueError(
                 f'The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.')
         if self.penalization is None:
             beta_sol = self._unpenalized(X=X, y=y)
             self._split_beta_sol(beta_sol)
-        elif self.penalization in self.non_adaptive_penalizations:
+        elif self.penalization in non_adaptive_penalizations:
             beta_sol = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
             self._split_beta_sol(beta_sol)
         else:
@@ -453,6 +452,8 @@ class Regressor(BaseModel, AdaptiveWeights):
         Estimated coefficients for the regression problem.
     intercept_: float
         Independent term in the regression model
+    n_features_in_: int
+        Number of features seen during fit.
     """
 
     def __init__(self, model='lm', penalization='lasso', quantile=0.5, fit_intercept=True, lambda1=0.1, alpha=0.5,
@@ -478,6 +479,12 @@ class Regressor(BaseModel, AdaptiveWeights):
         self.individual_weights = individual_weights
         self.group_weights = group_weights
         self.weight_tol = weight_tol
+
+
+
+
+
+
 
     def _aridge(self, X, y, group_index):
         X, m, _ = self._prepare_data(X)
@@ -582,16 +589,17 @@ class Regressor(BaseModel, AdaptiveWeights):
 
     def fit(self, X, y, group_index=None, sample_weight=None):
         X, y = check_X_y(X, y)
-        if self.penalization in self.grouped_penalizations and group_index is None:
+        self.n_features_in_ = X.shape[1]
+        if self.penalization in grouped_penalizations and group_index is None:
             raise ValueError(f'The penalization provided requires fitting the model with a group_index parameter but '
                              f'no group_index was detected.')
         if self.penalization is None:
             beta_sol = self._unpenalized(X=X, y=y)
             self._split_beta_sol(beta_sol)
-        elif self.penalization in self.non_adaptive_penalizations:
+        elif self.penalization in non_adaptive_penalizations:
             beta_sol = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
             self._split_beta_sol(beta_sol)
-        elif self.penalization in self.adaptive_penalizations:
+        elif self.penalization in adaptive_penalizations:
             self.fit_weights(X=X, y=y, group_index=group_index)
             beta_sol = getattr(self, '_' + self.penalization)(X=X, y=y, group_index=group_index)
             self._split_beta_sol(beta_sol)
