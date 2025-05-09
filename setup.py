@@ -9,13 +9,13 @@ with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='asgl',
-    version='2.1.2',
+    version='2.1.3',
     author='Alvaro Mendez Civieta',
     author_email='alvaromc317@gmail.com',
     license='GNU General Public License',
     zip_safe=False,
     url='https://github.com/alvaromc317/asgl',
-    dowload_url='https://github.com/alvaromc317/asgl/archive/refs/tags/2.1.2.tar.gz',
+    dowload_url='https://github.com/alvaromc317/asgl/archive/refs/tags/2.1.3.tar.gz',
     description='A regression solver for high dimensional penalized linear, quantile and logistic regression models',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -25,6 +25,7 @@ setup(
     install_requires=["cvxpy >= 1.2.0",
                       "numpy >= 1.20.0",
                       "scikit-learn >= 1.0",
+                      "scipy >= 1.1",
                       "pytest >= 7.1.2"],
     packages=find_packages()
 )

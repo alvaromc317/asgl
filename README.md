@@ -8,7 +8,7 @@
 [![License: GPL
 v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Package
-Version](https://img.shields.io/badge/version-2.1.1-blue.svg)](https://cran.r-project.org/package=asgl)
+Version](https://img.shields.io/badge/version-2.1.3-blue.svg)](https://cran.r-project.org/package=asgl)
 
 ## Introduction
 
@@ -48,68 +48,19 @@ asgl requires:
 - cvxpy \>= 1.2.0
 - numpy \>= 1.20.0
 - scikit-learn \>= 1.0
+- scipy \>= 1.1
 - pytest \>= 7.1.2
 
-## User installation
+## User installation and testing
 
 The easiest way to install asgl is using `pip`:
 
     pip install asgl
 
-## Testing
-
 After installation, you can launch the test suite from the source
 directory (you will need to have `pytest >= 7.1.2` installed) by runnig:
 
     pytest
-
-## What’s new?
-
-### 2.1.1
-
-Now the intercept term appears in the `intercept_` attribute instead of
-being part of the `coef_` attribute.
-
-### 2.1.0
-
-The latest release of the `asgl` package, version 2.1.0, introduces
-powerful enhancements for logistic regression models. Users can now
-easily tackle binary classification problems by setting `model='logit'`.
-For more granular control, specify `model='logit_raw'` to retrieve
-outputs before logistic transformation, or `model='logit_proba'` for
-probability outputs. Additionally, this update includes the
-implementation of ridge and adaptive ridge penalizations, accessible via
-`penalization='ridge'` or `'aridge'`, allowing for more flexible model
-tuning.
-
-### 2.0.0
-
-With the release of version 2.0, the `asgl` package has undergone
-significant enhancements and improvements. The most notable change is
-the introduction of the `Regressor` object, which brings full
-compatibility with scikit-learn. This means that the `Regressor` object
-can now be used just like any other scikit-learn estimator, enabling
-seamless integration with scikit-learn’s extensive suite of tools for
-model evaluation, hyperparameter optimization, and performance metrics.
-
-Key updates include:
-
-- Scikit-learn Compatibility: The `Regressor` class is now fully
-  compatible with scikit-learn. Users can leverage functionalities such
-  as `sklearn.model_selection.GridSearchCV` for hyperparameter tuning
-  and utilize various scikit-learn metrics and utilities to assess model
-  performance.
-
-- Deprecation of `ASGL` class: The old `ASGL` class is still included in
-  the package for backward compatibility but is now deprecated. It will
-  raise a `DeprecationWarning` when used, as it is no longer supported
-  and will be removed in future versions. Users are strongly encouraged
-  to transition to the new `Regressor` class to take advantage of the
-  latest features and improvements.
-
-For users currently utilizing the `ASGL` class, we recommend switching
-to the `Regressor` class to ensure continued support and access to the
-latest functionalities.
 
 ## Key features:
 
@@ -271,12 +222,12 @@ Adaptive Sparse Group Lasso penalization, utilizing scikit-learn’s
 
 In binary classification tasks using logistic regression, the default
 decision threshold of 0.5 is used by default. But it might not always
-yield the best accuracy. By leveraging the `'logit_proba'` model from
-the `asgl` package, you can obtain predicted probabilities and use them
-to find an optimal threshold that maximizes classification accuracy.
-This example demonstrates how to use `cross_val_predict` from
-scikit-learn to evaluate different thresholds and select the one that
-offers the highest accuracy for your classification model.
+yield the best accuracy. By leveraging the `predict_proba`, you can
+obtain predicted probabilities and use them to find an optimal threshold
+that maximizes classification accuracy. This example demonstrates how to
+use `cross_val_predict` from scikit-learn to evaluate different
+thresholds and select the one that offers the highest accuracy for your
+classification model.
 
 ``` python
 import numpy as np
@@ -290,27 +241,27 @@ X, y = make_classification(n_samples=1000, n_features=100, random_state=42)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
 # Create a Regressor object for logistic regression to output probabilities
-model = Regressor(model='logit_proba', penalization='ridge')
+model = Regressor(model='logit', penalization='ridge')
 
 # Use cross_val_predict to get probability estimates for each fold
-probabilities = cross_val_predict(model, X_train, y_train, method='predict', cv=5)
-#> C:\Users\alvar\ONEDRI~1\Trabajo\Investigacion\asgl\venv\Lib\site-packages\cvxpy\problems\problem.py:1407: UserWarning: Solution may be inaccurate. Try another solver, adjusting the solver settings, or solve with verbose=True for more information.
-#>   warnings.warn(
+probabilities_cv = cross_val_predict(model, X_train, y_train, method='predict_proba', cv=5)
+proba_pos_class_cv = probabilities_cv[:, 1]
 
+# Test different thresholds
 thresholds = np.linspace(0.01, 0.99, 100)
-
-# Calculate accuracy for each threshold
 accuracies = []
 for threshold in thresholds:
-    predictions = (probabilities >= threshold).astype(int)
-    accuracies.append(accuracy_score(y_train, predictions))
+    predictions_at_threshold = (proba_pos_class_cv >= threshold).astype(int)
+    accuracies.append(accuracy_score(y_train, predictions_at_threshold))
 ```
 
 ``` python
 plt.plot(thresholds, accuracies)
-plt.title('Accuracy vs Threshold')
-plt.ylabel('Accuracy')
+plt.title('Accuracy vs. Decision Threshold (Cross-Validated)')
 plt.xlabel('Threshold')
+plt.ylabel('Accuracy')
+plt.grid(True)
+plt.show()
 ```
 
 <img src="figures/README-unnamed-chunk-4-1.png" width="100%" />
@@ -344,17 +295,37 @@ weights:
 
 ``` python
 import numpy as np
+from sklearn.datasets import make_regression
+from sklearn.model_selection import train_test_split
 from asgl import Regressor
 
-# Generate custom weights
-custom_individual_weights = np.random.rand(X_train.shape[1])
-custom_group_weights = np.random.rand(len(np.unique(group_index)))
+# Generate data
+X, y = make_regression(n_samples=200, n_features=20, n_informative=10, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
 
-# Create a Regressor object with custom weights
-model = Regressor(model='lm', penalization='asgl', individual_weights=custom_individual_weights, group_weights=custom_group_weights)
+# Define a synthetic group structure
+group_index = np.array([i // 4 for i in range(X_train.shape[1])]) # 5 groups of 4 features
+num_features = X_train.shape[1]
+num_groups = len(np.unique(group_index))
 
-# Fit the model
-model.fit(X_train, y_train, group_index=group_index)
+# Generate custom weights (e.g., based on domain knowledge or a separate analysis)
+# Ensure non-negative weights
+custom_individual_weights = np.abs(np.random.rand(num_features)) + 1e-6
+custom_group_weights = np.abs(np.random.rand(num_groups)) + 1e-6
+
+# Create a Regressor with custom weights for Adaptive Sparse Group Lasso
+model_custom_weights = Regressor(model='lm',
+                                 penalization='asgl',
+                                 lambda1=0.1,
+                                 alpha=0.5,
+                                 individual_weights=custom_individual_weights,
+                                 group_weights=custom_group_weights)
+
+# Fit the model with group_index
+model_custom_weights.fit(X_train, y_train, group_index=group_index)
+
+predictions = model_custom_weights.predict(X_test)
+mse = mean_squared_error(y_test, predictions)
 ```
 
 ### Example 5: Comparison of lasso and adaptive lasso
@@ -401,7 +372,7 @@ print(f"Adaptive lasso MSE: {alasso_mse}")
 ```
 
     Lasso MSE: 59.693
-    Adaptive lasso MSE: 35.085
+    Adaptive lasso MSE: 34.954
 
 ## Contributions
 
@@ -424,3 +395,59 @@ package is open source and that any copy or modification of the original
 code must also be released under the GPL-3.0 license. In other words,
 you can take the code, add to it or make major changes, and then openly
 distribute your version, but not profit from it.
+
+## What’s new?
+
+### 2.1.3
+
+Major internal re-structure. The logistic model has been fully rewritten
+to include function calls `decision_boundary` and `predict_proba`. Also,
+model types `logit_proba` and `logit_raw` have been removed. One can
+still obtain probabilities calling the standard scikit-learn function
+`predict_proba` while `predict` assigns class to the largest
+probability. Aside from that, the inners of the Regressor class have
+been fully rewritten with a cleaner faster implementation. \### 2.1.1
+
+Now the intercept term appears in the `intercept_` attribute instead of
+being part of the `coef_` attribute.
+
+### 2.1.0
+
+The latest release of the `asgl` package, version 2.1.0, introduces
+powerful enhancements for logistic regression models. Users can now
+easily tackle binary classification problems by setting `model='logit'`.
+For more granular control, specify `model='logit_raw'` to retrieve
+outputs before logistic transformation, or `model='logit_proba'` for
+probability outputs. Additionally, this update includes the
+implementation of ridge and adaptive ridge penalizations, accessible via
+`penalization='ridge'` or `'aridge'`, allowing for more flexible model
+tuning.
+
+### 2.0.0
+
+With the release of version 2.0, the `asgl` package has undergone
+significant enhancements and improvements. The most notable change is
+the introduction of the `Regressor` object, which brings full
+compatibility with scikit-learn. This means that the `Regressor` object
+can now be used just like any other scikit-learn estimator, enabling
+seamless integration with scikit-learn’s extensive suite of tools for
+model evaluation, hyperparameter optimization, and performance metrics.
+
+Key updates include:
+
+- Scikit-learn Compatibility: The `Regressor` class is now fully
+  compatible with scikit-learn. Users can leverage functionalities such
+  as `sklearn.model_selection.GridSearchCV` for hyperparameter tuning
+  and utilize various scikit-learn metrics and utilities to assess model
+  performance.
+
+- Deprecation of `ASGL` class: The old `ASGL` class is still included in
+  the package for backward compatibility but is now deprecated. It will
+  raise a `DeprecationWarning` when used, as it is no longer supported
+  and will be removed in future versions. Users are strongly encouraged
+  to transition to the new `Regressor` class to take advantage of the
+  latest features and improvements.
+
+For users currently utilizing the `ASGL` class, we recommend switching
+to the `Regressor` class to ensure continued support and access to the
+latest functionalities.

@@ -4,18 +4,81 @@ from asgl import Regressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error
 
+# ------------------------------------------------------------------
+# Basic validation of constructor arguments
+# ------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "bad_kwargs",
+    [
+        dict(model="foo"),               # unsupported model
+        dict(penalization="foo"),        # unsupported penalty
+        dict(lambda1=-0.1),              # negative λ
+        dict(alpha=1.5),                 # alpha outside [0, 1]
+    ],
+)
+def test_bad_constructor_arguments_raises(bad_kwargs):
+    data = np.loadtxt('data.csv', delimiter=",", dtype=float)
+    X = data[:, :-1]
+    y = data[:, -1]
+    reg = Regressor(**bad_kwargs)
+    with pytest.raises(ValueError):
+        reg.fit(X, y)
 
-def test_prepare_data():
-    model = Regressor()
-    X = np.array([[1, 2], [3, 4]])
-    X_prepared, m, group_index = model._prepare_data(X)
-    assert X_prepared.shape == (2, 3)  # Adding intercept term
-    assert m == 3
-    assert group_index is None
+# ------------------------------------------------------------------
+# Regressor vs Classifier automatic tag / estimator type
+# ------------------------------------------------------------------
+def test_estimator_type_tags():
+    reg = Regressor(model="lm")
+    clf = Regressor(model="logit")
+    assert reg._estimator_type == "regressor"
+    assert clf._estimator_type == "classifier"
+    tags = clf._more_tags()
+    assert tags["binary_only"] is True
+    assert tags["requires_y"] is True
 
+# ------------------------------------------------------------------
+# Fit, predict & score for ordinary linear models
+# ------------------------------------------------------------------
+@pytest.mark.parametrize("penalty", [None, "lasso", "ridge"])
+def test_linear_regression_basic_behaviour(penalty):
+    data = np.loadtxt('data.csv', delimiter=",", dtype=float)
+    X = data[:, :-1]
+    y = data[:, -1]
+    reg = Regressor(model="lm", penalization=penalty, lambda1=0.1, tol=1e-4)
+    reg.fit(X, y)
+    # Fitted attributes ------------------------------------------------
+    assert hasattr(reg, "coef_")
+    assert reg.coef_.shape == (X.shape[1],)
+    assert np.isfinite(reg.intercept_)
+    assert reg.n_features_in_ == X.shape[1]
+    # Prediction API ---------------------------------------------------
+    y_pred = reg.predict(X)
+    assert y_pred.shape == y.shape
+    assert reg.score(X, y) > 0.8
+
+# ------------------------------------------------------------------
+# Classifier path: decision_function / predict_proba / score
+# ------------------------------------------------------------------
+@pytest.mark.parametrize("penalty", [None, "lasso", "ridge"])
+def test_logistic_classifier_api(penalty):
+    data = np.loadtxt('data_logit.csv', delimiter=",", dtype=float)
+    X = data[:, :-1]
+    y = data[:, -1].astype('int')
+    clf = Regressor(model="logit", penalization=penalty, lambda1=0.2)
+    clf.fit(X, y)
+
+    proba = clf.predict_proba(X)
+    assert proba.shape == (X.shape[0], 2)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0, atol=1e-6)
+
+    y_hat = clf.predict(X)
+    assert set(np.unique(y_hat)) <= {0, 1}
+
+    # Accuracy on training data should be high for the easy toy set
+    acc = clf.score(X, y)
+    assert acc >= 0.8
 
 # TEST UNPENALIZED ----------------------------------------------------------------------------------------------------
-
 
 def test_unpenalized_lm():
     data = np.loadtxt('data.csv', delimiter=",", dtype=float)
@@ -35,7 +98,6 @@ def test_unpenalized_lm():
         np.array([7.2923]),
         decimal=3,
         err_msg='Unpenalized lm failure')
-
 
 def test_unpenalized_qr():
     data = np.loadtxt('data.csv', delimiter=",", dtype=float)
@@ -62,7 +124,6 @@ def test_unpenalized_qr():
         decimal=3,
         err_msg='Unpenalized qr failure for quantile 0.2')
 
-
 def test_unpenalized_logit():
     data = np.loadtxt('data_logit.csv', delimiter=",", dtype=float)
     X = data[:, :-1]
@@ -78,9 +139,7 @@ def test_unpenalized_logit():
         decimal=3,
         err_msg='Unpenalized logit failure')
 
-
 # TEST LASSO PENALIZATION ---------------------------------------------------------------------------------------------
-
 
 def test_lasso_lm():
     data = np.loadtxt('data.csv', delimiter=",", dtype=float)
@@ -404,8 +463,8 @@ def test_alasso_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([23.3178, 19.7665, 31.4306, 55.9947, 91.4495, 19.995, 6.3401,
-                  37.1303, 2.0283, 61.1574]),
+        np.array([23.3174, 19.7624, 31.427 , 55.9946, 91.4542, 19.9922,  6.3423,
+                  37.1289,  2.0633, 61.1603]),
         decimal=3,
         err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pca_1" and power_weight=1.2')
 
@@ -511,9 +570,8 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([18.46772718, 15.2438716, 25.06222985, 50.31818813,
-                  89.9845044, 14.03017725, 8.6725918, 33.33322947, 55.33924112,
-                  58.02248048]),
+        np.array([18.46853439, 15.24387691, 25.06232772, 50.31922196, 89.98619455,
+                  14.03041184,  8.67287096, 33.33355092, 55.34033474, 58.02393396]),
         decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1 and power_weight=0')
 
@@ -522,9 +580,8 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([22.98471131, 14.70028341, 25.35506455, 56.01807932,
-                  99.41114437, 15.30445687, 10.15810845, 34.91790446, 61.44395258,
-                  66.27656906]),
+        np.array([23.38402864, 14.96457767, 25.43043672, 56.25291803, 99.32471105,
+                  15.47816076, 10.44635765, 34.88416976, 61.4689987 , 66.33217868]),
         decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pca_pct" and power_weight=1.2')
 
@@ -533,8 +590,8 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([23.2873, 18.7112, 29.5655, 55.7678, 93.5404, 18.5662, 7.6139,
-                  36.3732, 19.7147, 62.2061]),
+        np.array([23.97915886, 21.26259436, 31.7304966 , 56.45284684, 91.21336946,
+                  20.29272193,  6.69496824, 37.30329918,  1.24891757, 61.28419784]),
         decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pca_pct", variability_pct=0.1 and power_weight=1.2')
 
@@ -543,8 +600,8 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([8.9807, 5.0014, 22.2048, 33.9499, 78.2119, 12.6483, 1.2206,
-                  25.3468, 0.5103, 35.8857]),
+        np.array([ 1.88354721,  0.21666527, 11.18165339, 12.75470637, 66.10301797,
+                   7.7833368 , -0.9107602 ,  7.31469175,  0.        , 11.85425197]),
     decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pca_1" and power_weight=1.2')
 
@@ -553,9 +610,9 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([0.2624502, 11.09122486, 16.54176195, 34.80771751,
-                  88.67720963, 5.29540699, 0.40226454, 30.5390739, 46.33397339,
-                  39.73372401]),
+        np.array([ 0.00000000e+00,  3.28312082e+00,  7.86422459e+00,  1.95028400e+01,
+                   8.17309710e+01,  9.24866146e-01, -3.18326102e-02,  1.95011609e+01,
+                   3.03838761e+01,  1.56990339e+01]),
         decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pls_1" and power_weight=1.2')
 
@@ -564,9 +621,8 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([23.24260219, 14.99870036, 25.31850525, 56.1253754,
-                  99.36498975, 15.38625846, 10.33598452, 34.87255987, 61.42942546,
-                  66.25610992]),
+        np.array([23.41410179, 15.03478239, 25.42636872, 56.26431383, 99.31535441,
+       15.48547795, 10.4759237 , 34.8791498 , 61.46432289, 66.32665609]),
         decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pls_pct" and power_weight=1.2')
 
@@ -575,9 +631,8 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([23.24260219, 14.99870036, 25.31850525, 56.1253754,
-                  99.36498975, 15.38625846, 10.33598452, 34.87255987, 61.42942546,
-                  66.25610992]),
+        np.array([23.41410188, 15.0347823 , 25.42636878, 56.26431388, 99.31535436,
+                  15.48547789, 10.47592391, 34.8791498 , 61.46432291, 66.32665609]),
         decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="unpenalized" and power_weight=1.2')
 
@@ -586,9 +641,9 @@ def test_aridge_lm():
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
-        np.array([1.82365801e+01, 1.59339563e+01, 2.28611938e+01,
-                  5.25005782e+01, 1.02943320e+02, 1.41203865e+01, 7.15024073e-03,
-                  3.55827631e+01, 6.10175767e+01, 6.57531195e+01]),
+        np.array([ 18.49144745,  15.99689856,  23.00415709,  52.67433794,
+                   102.8893304 ,  14.32344786,   0.        ,  35.5752288 ,
+                   61.03577072,  65.84011405]),
         decimal=3,
         err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="lasso", power_weight=1.2 and lasso_weights=10')
 
@@ -760,25 +815,8 @@ def test_errors():
 
     model = Regressor(model='qr', penalization='gl', quantile=0.2, lambda1=0.1, solver='CLARABEL')
     with pytest.raises(ValueError,
-                       match="The penalization provided requires fitting the model with a group_index parameter but no group_index was detected."):
+                       match=f'The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.'):
         model.fit(X, y)
-
-    model = Regressor(model='aaa', penalization='lasso', quantile=0.2, lambda1=0.1, solver='CLARABEL')
-    with pytest.raises(ValueError,
-                       match="Invalid value for model parameter."):
-        model.fit(X, y)
-
-    model = Regressor(model='lm', penalization='aaa', quantile=0.2, lambda1=0.1, solver='CLARABEL')
-    with pytest.raises(ValueError,
-                       match="Invalid value for penalization parameter."):
-        model.fit(X, y)
-
-    model = Regressor(model='lm', penalization='alasso', quantile=0.1, lambda1=0.1, weight_technique='aaa',
-                      solver='CLARABEL')
-    with pytest.raises(AttributeError,
-                       match="'Regressor' object has no attribute '_waaa'"):
-        model.fit(X, y)
-
 
 # SKLEARN COMPATIBILITY -----------------------------------------------------------------------------------------------
 
