@@ -35,7 +35,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
                  fit_intercept: bool = True,
                  lambda1: float = 0.1,
                  alpha: float = 0.5,
-                 solver: str = 'default',
+                 solver: str = 'CLARABEL',
                  tol: float = 1e-3):
         self.model = model
         self.penalization = penalization
@@ -171,7 +171,6 @@ class BaseModel(BaseEstimator, RegressorMixin):
         return intercept_sol, beta_sol
 
     def fit(self, X: np.ndarray, y: np.ndarray, group_index: Optional[Sequence[int]] = None):
-        # Catch feature names if X is a pandas dataframe
         self.feature_names_in_ = None
         if hasattr(X, "columns") and callable(getattr(X, "columns", None)):
             self.feature_names_in_ = np.asarray(X.columns, dtype=object)
@@ -180,13 +179,14 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._check_attributes()
         # Check binary y
         if self._estimator_type == "classifier":
-            y_type = type_of_target(y)
-            if y_type != "binary":
+            if type_of_target(y) != "binary":
                 unique_y_values = np.unique(y)
                 # check_estimator might pass float y like [0.0, 1.0]
-                is_binary_numeric = len(unique_y_values) <= 2 and np.all(np.isin(unique_y_values, [0.0, 1.0]))
-                if not is_binary_numeric:
+                is_binary_int = len(unique_y_values) <= 2 and np.all(np.isin(unique_y_values, [0, 1]))
+                is_binary_float = len(unique_y_values) <= 2 and np.all(np.isin(unique_y_values, [0.0, 1.0]))
+                if (not is_binary_int) | (not is_binary_float):
                     raise ValueError(f"For logistic model, y must contain only 0 and 1 (or 0.0, 1.0).")
+                y = y.astype(int)
             self.classes_ = np.array([0, 1])  # Assuming 0 and 1 are the classes
         if self.penalization in (GROUP_NONADAPTIVE+GROUP_ADAPTIVE) and group_index is None:
             raise ValueError(f'The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.')
@@ -203,7 +203,6 @@ class BaseModel(BaseEstimator, RegressorMixin):
 
     def decision_function(self, X: np.ndarray) -> np.ndarray:
         check_is_fitted(self, ["coef_", "intercept_", "is_fitted_"])
-        X = self._validate_data(X, reset=False)
         intercept = self.intercept_ if self.fit_intercept else 0
         predictions = np.dot(X, self.coef_) + intercept
         return predictions
@@ -226,6 +225,15 @@ class BaseModel(BaseEstimator, RegressorMixin):
             return self.classes_[indices]
         else: # Regressor
             return raw_predictions
+
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        tags.target_tags.required = True
+        if self.model == 'logit':
+            tags.estimator_type = 'classifier'
+        else:
+            tags.estimator_type = 'regressor'
+        return tags
 
     def _more_tags(self):
         tags = {
@@ -430,8 +438,8 @@ class Regressor(BaseModel, AdaptiveWeights):
     alpha: float, default=0.5
         Constant that performs tradeoff between lasso and group lasso in sgl and asgl penalizations.
         ``alpha=1`` enforces a lasso while ``alpha=0`` enforces a group lasso.
-    solver: str, default='default'
-        Solver to be used by cp. Default uses optimal alternative depending on the problem.
+    solver: str, default='CLARABEL'
+        Solver to be used by cvxpy. Default uses open source convex programming solver CLARABEL.
         Users can check available solvers via the command `cp.installed_solvers()`.
     weight_technique: str, default='pca_pct'
         Weight technique used to fit the adaptive weights. Currently, accepts:
@@ -482,7 +490,6 @@ class Regressor(BaseModel, AdaptiveWeights):
     n_features_in_: int
         Number of features seen during fit.
     """
-
     def __init__(self,
                  model: str='lm',
                  penalization: str | None='lasso',

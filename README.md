@@ -8,7 +8,7 @@
 [![License: GPL
 v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Package
-Version](https://img.shields.io/badge/version-2.1.3-blue.svg)](https://cran.r-project.org/package=asgl)
+Version](https://img.shields.io/badge/version-2.1.4-blue.svg)](https://cran.r-project.org/package=asgl)
 
 ## Introduction
 
@@ -45,9 +45,9 @@ regression](https://towardsdatascience.com/squashing-the-average-a-dive-into-pen
 asgl requires:
 
 - Python \>= 3.9
-- cvxpy \>= 1.2.0
+- cvxpy \>= 1.5.0
 - numpy \>= 1.20.0
-- scikit-learn \>= 1.0
+- scikit-learn \>= 1.6
 - scipy \>= 1.1
 - pytest \>= 7.1.2
 
@@ -398,6 +398,11 @@ distribute your version, but not profit from it.
 
 ## What’s new?
 
+### 2.1.4
+
+The package has been updated to fullfill `scikit-learn`’s requirements
+in regards to estimator class definition
+
 ### 2.1.3
 
 Major internal re-structure. The logistic model has been fully rewritten
@@ -406,7 +411,9 @@ model types `logit_proba` and `logit_raw` have been removed. One can
 still obtain probabilities calling the standard scikit-learn function
 `predict_proba` while `predict` assigns class to the largest
 probability. Aside from that, the inners of the Regressor class have
-been fully rewritten with a cleaner faster implementation. \### 2.1.1
+been fully rewritten with a cleaner faster implementation.
+
+### 2.1.1
 
 Now the intercept term appears in the `intercept_` attribute instead of
 being part of the `coef_` attribute.
