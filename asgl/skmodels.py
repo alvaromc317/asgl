@@ -133,7 +133,8 @@ class BaseModel(BaseEstimator, RegressorMixin):
                 f"penalization must be one of {sorted(ALL_PENALTIES)}; got {self.penalization}."
             )
         # canon_backend validation
-        if not isinstance(self.canon_backend, str) or self.canon_backend not in ALLOWED_CANON_BACKENDS:
+        check_scalar(self.canon_backend, "canon_backend", target_type=str)
+        if self.canon_backend not in ALLOWED_CANON_BACKENDS:
             raise ValueError(
                 f"canon_backend must be one of {sorted(ALLOWED_CANON_BACKENDS)}; got {self.canon_backend}."
             )
