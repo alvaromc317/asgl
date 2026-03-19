@@ -34,6 +34,11 @@ ALLOWED_WEIGHT_TECHNIQUES = {
     "lasso",
     "ridge",
 }
+ALLOWED_CANON_BACKENDS = {
+    "CPP",
+    "SCIPY",
+    "COO",
+}
 
 
 def _get_group_info(group_index: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[int, np.ndarray]]:
@@ -126,6 +131,12 @@ class BaseModel(BaseEstimator, RegressorMixin):
         if (self.penalization is not None) and (self.penalization not in ALL_PENALTIES):
             raise ValueError(
                 f"penalization must be one of {sorted(ALL_PENALTIES)}; got {self.penalization}."
+            )
+        # canon_backend validation
+        check_scalar(self.canon_backend, "canon_backend", target_type=str)
+        if self.canon_backend not in ALLOWED_CANON_BACKENDS:
+            raise ValueError(
+                f"canon_backend must be one of {sorted(ALLOWED_CANON_BACKENDS)}; got {self.canon_backend}."
             )
 
     def _quantile_function(self, X) -> cp.Expression:
