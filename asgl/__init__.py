@@ -1,1 +1,1 @@
-from .skmodels import Regressor
+from .skmodels import Regressor  # noqa: F401

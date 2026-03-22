@@ -56,7 +56,7 @@ and [Towards Data Science: Quantile regression](https://towardsdatascience.com/s
 
 asgl requires:
 
-- Python \>= 3.9
+- Python \>= 3.10
 - cvxpy \>= 1.5.0
 - numpy \>= 1.20.0
 - scikit-learn \>= 1.6

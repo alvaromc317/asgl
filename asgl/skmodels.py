@@ -13,7 +13,6 @@ from sklearn.metrics import accuracy_score
 
 # sparse matrices
 from scipy import sparse
-from typing import Union
 
 ArrayOrSparse = Union[np.ndarray, sparse.spmatrix]
 
@@ -389,9 +388,9 @@ class BaseModel(BaseEstimator, RegressorMixin):
                 is_binary_float = len(unique_y_values) <= 2 and np.all(
                     np.isin(unique_y_values, [0.0, 1.0])
                 )
-                if (not is_binary_int) | (not is_binary_float):
+                if not (is_binary_int or is_binary_float):
                     raise ValueError(
-                        f"For logistic model, y must contain only 0 and 1 (or 0.0, 1.0)."
+                        "For logistic model, y must contain only 0 and 1 (or 0.0, 1.0)."
                     )
                 y = y.astype(int)
             self.classes_ = np.array([0, 1])  # Assuming 0 and 1 are the classes
@@ -400,7 +399,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
             and group_index is None
         ):
             raise ValueError(
-                f"The penalization provided requires fitting the model with a group_index parameter but no group_index was detected."
+                "The penalization provided requires fitting the model with a group_index parameter but no group_index was detected."
             )
         if group_index is not None:
             group_index = np.asarray(group_index, dtype=int)
@@ -410,7 +409,7 @@ class BaseModel(BaseEstimator, RegressorMixin):
                 )
             if any(group_index < 0):
                 raise ValueError(
-                    f"group_index must be a positive integer array. Negative values detected"
+                    "group_index must be a positive integer array. Negative values detected"
                 )
         # Solve the problem
         self.intercept_, self.coef_ = self._obtain_beta(X, y, group_index)

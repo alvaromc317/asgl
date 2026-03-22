@@ -21,7 +21,7 @@ setup(
     long_description_content_type='text/markdown',
     keywords=['variable-selection', 'regression', 'classification', 'penalization', 'lasso',
               'adaptive-lasso', 'group-lasso', 'sparse-group-lasso', 'high-dimension', 'quantile-regression'],
-    python_requires='>=3.9',
+    python_requires='>=3.10',
     install_requires=["cvxpy >= 1.5.0",
                       "numpy >= 1.20.0",
                       "scikit-learn >= 1.6",
