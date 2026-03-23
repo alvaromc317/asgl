@@ -15,7 +15,7 @@ setup(
     license='GNU General Public License',
     zip_safe=False,
     url='https://github.com/alvaromc317/asgl',
-    dowload_url='https://github.com/alvaromc317/asgl/archive/refs/tags/2.1.4.tar.gz',
+    download_url='https://github.com/alvaromc317/asgl/archive/refs/tags/2.1.4.tar.gz',
     description='A regression solver for high dimensional penalized linear, quantile and logistic regression models',
     long_description=long_description,
     long_description_content_type='text/markdown',
