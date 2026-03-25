@@ -379,20 +379,19 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._check_attributes()
         # Check binary y
         if self._estimator_type == "classifier":
-            if type_of_target(y) != "binary":
-                unique_y_values = np.unique(y)
-                # check_estimator might pass float y like [0.0, 1.0]
-                is_binary_int = len(unique_y_values) <= 2 and np.all(
-                    np.isin(unique_y_values, [0, 1])
+            unique_y_values = np.unique(y)
+            # check_estimator might pass float y like [0.0, 1.0]
+            is_binary_int = len(unique_y_values) <= 2 and np.all(
+                np.isin(unique_y_values, [0, 1])
+            )
+            is_binary_float = len(unique_y_values) <= 2 and np.all(
+                np.isin(unique_y_values, [0.0, 1.0])
+            )
+            if not (is_binary_int or is_binary_float):
+                raise ValueError(
+                    "For logistic model, y must contain only 0 and 1 (or 0.0, 1.0)."
                 )
-                is_binary_float = len(unique_y_values) <= 2 and np.all(
-                    np.isin(unique_y_values, [0.0, 1.0])
-                )
-                if not (is_binary_int or is_binary_float):
-                    raise ValueError(
-                        "For logistic model, y must contain only 0 and 1 (or 0.0, 1.0)."
-                    )
-                y = y.astype(int)
+            y = y.astype(int)
             self.classes_ = np.array([0, 1])  # Assuming 0 and 1 are the classes
         if (
             self.penalization in (GROUP_NONADAPTIVE + GROUP_ADAPTIVE)
