@@ -23,7 +23,7 @@ with warnings.catch_warnings(record=True) as w:
     print("Global warnings emitted:", [warn.message for warn in w])
 
 print("\nFitting model...")
-model = Regressor(model="lm", penalization="asgl", lambda1=0.1)
+model = Regressor(model="lm", penalization="asgl", lambda1=0.1, solver="CLARABEL")
 with warnings.catch_warnings(record=True) as w:
     model.fit(X, y, group_index=group_index)
     print("Fitting warnings emitted:", [warn.message for warn in w])
