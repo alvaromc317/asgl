@@ -379,15 +379,8 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._check_attributes()
         # Check binary y
         if self._estimator_type == "classifier":
-            unique_y_values = np.unique(y)
-            # check_estimator might pass float y like [0.0, 1.0]
-            is_binary_int = len(unique_y_values) <= 2 and np.all(
-                np.isin(unique_y_values, [0, 1])
-            )
-            is_binary_float = len(unique_y_values) <= 2 and np.all(
-                np.isin(unique_y_values, [0.0, 1.0])
-            )
-            if not (is_binary_int or is_binary_float):
+            unique_y_values = set(np.unique(y))
+            if not (unique_y_values.issubset({0, 1}) or unique_y_values.issubset({0.0, 1.0})):
                 raise ValueError(
                     "For logistic model, y must contain only 0 and 1 (or 0.0, 1.0)."
                 )
