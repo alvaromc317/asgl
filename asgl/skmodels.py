@@ -588,7 +588,7 @@ class AdaptiveWeights:
             )
         n_comp = np.searchsorted(fractions_of_explained_variance, self.variability_pct) + 1
         # Ensure n_comp is at least 1
-        n_comp = max(1, min(n_comp, pls.x_rotations_.shape[1]))
+        n_comp = np.clip(n_comp, 1, pls.x_rotations_.shape[1])
 
         # Calculate coefficients directly from the existing PLS model without refitting
         coef = np.dot(pls.x_rotations_[:, :n_comp], pls.y_loadings_[:, :n_comp].T)
