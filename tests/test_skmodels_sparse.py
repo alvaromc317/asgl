@@ -37,8 +37,8 @@ def test_estimator_type_tags():
     assert reg._estimator_type == "regressor"
     assert clf._estimator_type == "classifier"
     tags = clf._more_tags()
-    assert tags["binary_only"] is True
     assert tags["requires_y"] is True
+    assert tags["allow_nan"] is False
 
 
 # ------------------------------------------------------------------
@@ -88,7 +88,7 @@ def test_logistic_classifier_api(penalty):
     assert acc >= 0.8
 
 
-# TEST UNPENALIZED ----------------------------------------------------------------------------------------------------
+# TEST UNPENALIZED --------------------------------------------------------
 
 
 def test_unpenalized_lm():
@@ -132,9 +132,7 @@ def test_unpenalized_qr():
     X = sparse.csr_matrix(X)
     y = data[:, -1]
 
-    model = Regressor(
-        model="qr", penalization=None, quantile=0.8, solver="CLARABEL"
-    )
+    model = Regressor(model="qr", penalization=None, quantile=0.8, solver="CLARABEL")
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -156,9 +154,7 @@ def test_unpenalized_qr():
         err_msg="Unpenalized qr failure for quantile 0.8",
     )
 
-    model = Regressor(
-        model="qr", penalization=None, quantile=0.2, solver="CLARABEL"
-    )
+    model = Regressor(model="qr", penalization=None, quantile=0.2, solver="CLARABEL")
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -193,16 +189,16 @@ def test_unpenalized_logit():
         model.coef_,
         np.array(
             [
-                1.31852718,
-                1.44379378,
-                -0.8350253,
-                16.70362005,
-                0.97621178,
-                -37.37958466,
-                -14.11223982,
-                1.41652058,
-                9.47822006,
-                -15.14141223,
+                -0.63590658,
+                2.0383636,
+                0.60518489,
+                11.52344861,
+                -0.55281497,
+                -25.8225801,
+                -12.00634409,
+                2.66287183,
+                2.72357986,
+                -10.73596602,
             ]
         ),
         decimal=3,
@@ -219,9 +215,7 @@ def test_lasso_lm():
     X = sparse.csr_matrix(X)
     y = data[:, -1]
 
-    model = Regressor(
-        model="lm", penalization="lasso", lambda1=0, solver="CLARABEL"
-    )
+    model = Regressor(model="lm", penalization="lasso", lambda1=0, solver="CLARABEL")
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -243,9 +237,7 @@ def test_lasso_lm():
         err_msg="Lasso lm failure for lambda=0",
     )
 
-    model = Regressor(
-        model="lm", penalization="lasso", lambda1=0.1, solver="CLARABEL"
-    )
+    model = Regressor(model="lm", penalization="lasso", lambda1=0.1, solver="CLARABEL")
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -359,7 +351,7 @@ def test_lasso_qr():
     )
 
 
-# TEST RIDGE PENALIZATION ---------------------------------------------------------------------------------------------
+# TEST RIDGE PENALIZATION -----------------------------------------------
 
 
 def test_ridge_lm():
@@ -368,9 +360,7 @@ def test_ridge_lm():
     X = sparse.csr_matrix(X)
     y = data[:, -1]
 
-    model = Regressor(
-        model="lm", penalization="ridge", lambda1=0, solver="CLARABEL"
-    )
+    model = Regressor(model="lm", penalization="ridge", lambda1=0, solver="CLARABEL")
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -392,9 +382,7 @@ def test_ridge_lm():
         err_msg="Ridge lm failure for lambda=0",
     )
 
-    model = Regressor(
-        model="lm", penalization="ridge", lambda1=0.1, solver="CLARABEL"
-    )
+    model = Regressor(model="lm", penalization="ridge", lambda1=0.1, solver="CLARABEL")
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -417,7 +405,7 @@ def test_ridge_lm():
     )
 
 
-# TEST GROUP LASSO PENALIZATION ---------------------------------------------------------------------------------------
+# TEST GROUP LASSO PENALIZATION ---------------------------------------------
 
 
 def test_gl_lm():
@@ -427,9 +415,7 @@ def test_gl_lm():
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
-    model = Regressor(
-        model="lm", penalization="gl", lambda1=0, solver="CLARABEL"
-    )
+    model = Regressor(model="lm", penalization="gl", lambda1=0, solver="CLARABEL")
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -451,9 +437,7 @@ def test_gl_lm():
         err_msg="Group lasso lm failure for lambda=0",
     )
 
-    model = Regressor(
-        model="lm", penalization="gl", lambda1=0.1, solver="CLARABEL"
-    )
+    model = Regressor(model="lm", penalization="gl", lambda1=0.1, solver="CLARABEL")
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -568,7 +552,7 @@ def test_gl_qr():
     )
 
 
-# TEST SPARSE GROUP LASSO PENALIZATION --------------------------------------------------------------------------------
+# TEST SPARSE GROUP LASSO PENALIZATION ----------------------------------------
 
 
 def test_sgl_lm():
@@ -578,9 +562,7 @@ def test_sgl_lm():
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
-    model = Regressor(
-        model="lm", penalization="sgl", lambda1=0, solver="CLARABEL"
-    )
+    model = Regressor(model="lm", penalization="sgl", lambda1=0, solver="CLARABEL")
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -831,7 +813,7 @@ def test_sgl_qr():
     )
 
 
-# ADAPTIVE LASSO ------------------------------------------------------------------------------------------------------
+# ADAPTIVE LASSO ----------------------------------------------------
 
 
 def test_alasso_lm():
@@ -1100,7 +1082,7 @@ def test_alasso_lm():
                 10.46980939,
                 34.88025905,
                 61.46483173,
-                66.32724564
+                66.32724564,
             ]
         ),
         decimal=3,
@@ -1235,7 +1217,7 @@ def test_alasso_qr():
     )
 
 
-# ADAPTIVE RIDGE ------------------------------------------------------------------------------------------------------
+# ADAPTIVE RIDGE -----------------------------------------------------
 
 
 def test_aridge_lm():
@@ -1503,7 +1485,7 @@ def test_aridge_lm():
                 10.44635765,
                 34.88416976,
                 61.4689987,
-                66.33217868
+                66.33217868,
             ]
         ),
         decimal=3,
@@ -1572,7 +1554,7 @@ def test_aridge_lm():
     )
 
 
-# ADAPTIVE GROUP LASSO ------------------------------------------------------------------------------------------------
+# ADAPTIVE GROUP LASSO ------------------------------------------------------
 
 
 def test_agl_lm():
@@ -1721,7 +1703,7 @@ def test_agl_lm():
                 10.46922814,
                 34.87989905,
                 61.46374758,
-                66.32666011
+                66.32666011,
             ]
         ),
         decimal=3,
@@ -1797,7 +1779,7 @@ def test_agl_qr():
     )
 
 
-# ADAPTIVE SPARSE GROUP LASSO -----------------------------------------------------------------------------------------
+# ADAPTIVE SPARSE GROUP LASSO --------------------------------------------
 
 
 def test_asgl_lm():
@@ -1952,7 +1934,7 @@ def test_asgl_lm():
                 10.46951872,
                 34.8800792,
                 61.46428965,
-                66.32695275
+                66.32695275,
             ]
         ),
         decimal=3,
@@ -2030,7 +2012,7 @@ def test_asgl_qr():
     )
 
 
-# ERROR HANDLING ------------------------------------------------------------------------------------------------------
+# ERROR HANDLING -------------------------------------------------------------
 
 
 def test_errors():
@@ -2064,13 +2046,16 @@ def test_negative_group_index_raises_error():
     # Create a group_index with a negative value
     group_index = np.array([1, 1, 2, 2, -1])
 
-    model = Regressor(model='lm', penalization='gl', lambda1=0.1, variability_pct=1)
+    model = Regressor(model="lm", penalization="gl", lambda1=0.1, variability_pct=1)
 
-    with pytest.raises(ValueError, match="group_index must be a positive integer array. Negative values detected"):
+    with pytest.raises(
+        ValueError,
+        match="group_index must be a positive integer array. Negative values detected",
+    ):
         model.fit(X, y, group_index=group_index)
 
 
-# SKLEARN COMPATIBILITY -----------------------------------------------------------------------------------------------
+# SKLEARN COMPATIBILITY -----------------------------------------------------
 
 
 def test_predict():

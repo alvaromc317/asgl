@@ -40,13 +40,17 @@ ALLOWED_CANON_BACKENDS = {
 }
 
 
-def _get_group_info(group_index: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[int, np.ndarray]]:
+def _get_group_info(
+    group_index: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, Dict[int, np.ndarray]]:
     """
     Efficiently computes group sizes and indices for each group.
     """
-    argsort_indices = np.argsort(group_index, kind='mergesort')
+    argsort_indices = np.argsort(group_index, kind="mergesort")
     sorted_group_index = group_index[argsort_indices]
-    unique_groups, group_starts, group_counts = np.unique(sorted_group_index, return_index=True, return_counts=True)
+    unique_groups, group_starts, group_counts = np.unique(
+        sorted_group_index, return_index=True, return_counts=True
+    )
     indices_per_group = {
         g: argsort_indices[start : start + count]
         for g, start, count in zip(unique_groups, group_starts, group_counts)
@@ -160,8 +164,14 @@ class BaseModel(BaseEstimator, RegressorMixin):
                 self._quantile_function(X=(y - model_prediction))
             )
         elif self.model == "logit":
-            return (-1.0 / y.shape[0]) * cp.sum(
-                cp.multiply(y - 1, model_prediction) - cp.logistic(-model_prediction)
+            # Flatten both to 1D for universal element-wise multiply across single and multi-output
+            y_flat = cp.reshape(y, (y.shape[0] * y.shape[1],))
+            pred_flat = cp.reshape(
+                model_prediction,
+                (model_prediction.shape[0] * model_prediction.shape[1],),
+            )
+            return (1.0 / y.shape[0]) * cp.sum(
+                cp.logistic(pred_flat) - cp.multiply(y_flat, pred_flat)
             )
         else:
             raise ValueError("Invalid value for model parameter.")
@@ -214,8 +224,11 @@ class BaseModel(BaseEstimator, RegressorMixin):
 
         # --- Phase 2: fall back to remaining installed solvers not yet tried ---
         if not solved:
-            remaining = [s for s in installed_solvers if s not in failed_solvers
-                         and s not in requested_solvers]
+            remaining = [
+                s
+                for s in installed_solvers
+                if s not in failed_solvers and s not in requested_solvers
+            ]
             if remaining:
                 warnings.warn(
                     f"Requested solver(s) {requested_solvers} failed. "
@@ -236,7 +249,10 @@ class BaseModel(BaseEstimator, RegressorMixin):
                             verbose=self.verbose,
                             canon_backend=self.canon_backend,
                         )
-                    if problem.status is not None and "optimal" in problem.status.lower():
+                    if (
+                        problem.status is not None
+                        and "optimal" in problem.status.lower()
+                    ):
                         warnings.warn(
                             f"Successfully solved with fallback solver: {alt_solver}",
                             RuntimeWarning,
@@ -379,8 +395,12 @@ class BaseModel(BaseEstimator, RegressorMixin):
         self._check_attributes()
         # Check binary y
         if self._estimator_type == "classifier":
+            if y.ndim > 1:
+                raise ValueError("Logistic regression does not support multi-output y.")
             unique_y_values = set(np.unique(y))
-            if not (unique_y_values.issubset({0, 1}) or unique_y_values.issubset({0.0, 1.0})):
+            if not (
+                unique_y_values.issubset({0, 1}) or unique_y_values.issubset({0.0, 1.0})
+            ):
                 raise ValueError(
                     "For logistic model, y must contain only 0 and 1 (or 0.0, 1.0)."
                 )
@@ -444,20 +464,24 @@ class BaseModel(BaseEstimator, RegressorMixin):
     def __sklearn_tags__(self):
         tags = super().__sklearn_tags__()
         tags.target_tags.required = True
+        tags.target_tags.multi_output = True
         if self.model == "logit":
             tags.estimator_type = "classifier"
+            from sklearn.utils._tags import ClassifierTags
+
+            tags.classifier_tags = ClassifierTags(multi_class=False)
         else:
             tags.estimator_type = "regressor"
+            from sklearn.utils._tags import RegressorTags
+
+            tags.regressor_tags = RegressorTags()
         return tags
 
     def _more_tags(self):
-        tags = {
-            "allow_nan": False,  # declare the estimator does *not* accept NaNs
-            "requires_y": True,  # fitting requires a target y
+        return {
+            "allow_nan": False,
+            "requires_y": True,
         }
-        if self._estimator_type == "classifier":
-            tags["binary_only"] = True
-        return tags
 
     def score(self, X, y, sample_weight=None):
         if self._estimator_type == "regressor":
@@ -507,7 +531,10 @@ class AdaptiveWeights:
         """
         Weights based on the first principal component
         """
-        pca = PCA(n_components=1, svd_solver="auto")
+        if sparse.issparse(X):
+            pca = PCA(n_components=1, svd_solver="arpack")
+        else:
+            pca = PCA(n_components=1, svd_solver="auto")
         pca.fit(X)
         tmp_weight = np.abs(pca.components_).ravel()
         return tmp_weight
@@ -516,22 +543,30 @@ class AdaptiveWeights:
         """
         Weights based on principal component analysis
         """
-        if sparse.issparse(X) and self.variability_pct < 1:
+        if sparse.issparse(X):
             max_comp = np.min(X.shape) - 1
             # Run PCA once with max_comp
             pca = PCA(n_components=max_comp, svd_solver="arpack")
             t = pca.fit_transform(X)
             explained_variance_ratio_cumsum = np.cumsum(pca.explained_variance_ratio_)
-            n_comp = np.searchsorted(explained_variance_ratio_cumsum, self.variability_pct) + 1
+            n_comp = (
+                np.searchsorted(explained_variance_ratio_cumsum, self.variability_pct)
+                + 1
+            )
             t = t[:, :n_comp]
             p = pca.components_[:n_comp].T
         else:
-            var_pct2 = (
-                (np.min(X.shape) - 1) if self.variability_pct == 1 else self.variability_pct
+            max_comp = np.min(X.shape) - 1
+            pca = PCA(n_components=max_comp, svd_solver="arpack")
+            t = pca.fit_transform(X)
+            explained_variance_ratio_cumsum = np.cumsum(pca.explained_variance_ratio_)
+            n_comp = (
+                np.searchsorted(explained_variance_ratio_cumsum, self.variability_pct)
+                + 1
             )
-            pca = PCA(n_components=var_pct2, svd_solver="auto")
-            t = pca.fit_transform(X)  # scores
-            p = pca.components_.T  # loadings
+            n_comp = min(n_comp, max_comp)
+            t = t[:, :n_comp]
+            p = pca.components_[:n_comp].T
         unpenalized_model = BaseModel(
             model=self.model,
             penalization=None,
@@ -578,7 +613,9 @@ class AdaptiveWeights:
                 RuntimeWarning,
                 stacklevel=2,
             )
-        n_comp = np.searchsorted(fractions_of_explained_variance, self.variability_pct) + 1
+        n_comp = (
+            np.searchsorted(fractions_of_explained_variance, self.variability_pct) + 1
+        )
         # Ensure n_comp is at least 1
         n_comp = np.clip(n_comp, 1, pls.x_rotations_.shape[1])
 
@@ -596,14 +633,13 @@ class AdaptiveWeights:
         """
         Weights based on sparse principal component analysis.
         """
-        x_center = X - X.mean(axis=0)
         total_variance_in_x = np.sum(np.var(X, axis=0))
         spca = SparsePCA(
             n_components=np.min(X.shape) - 1,
             alpha=self.spca_alpha,
             ridge_alpha=self.spca_ridge_alpha,
         )
-        t = spca.fit_transform(x_center)
+        t = spca.fit_transform(X)
         p = spca.components_.T
         # Obtain explained variance using spca as explained in the original paper (based on QR decomposition)
         _, r_spca = np.linalg.qr(t, mode="reduced")
@@ -617,7 +653,10 @@ class AdaptiveWeights:
                 RuntimeWarning,
                 stacklevel=2,
             )
-        n_comp = np.searchsorted(fractions_of_explained_variance, self.variability_pct)
+        n_comp = (
+            np.searchsorted(fractions_of_explained_variance, self.variability_pct) + 1
+        )
+        n_comp = max(1, n_comp)
         unpenalized_model = BaseModel(
             model=self.model,
             penalization=None,
@@ -706,7 +745,10 @@ class AdaptiveWeights:
         y: ArrayOrSparse,
         group_index: Optional[Sequence[int]] = None,
     ):
-        if not isinstance(self.weight_technique, str) or self.weight_technique not in ALLOWED_WEIGHT_TECHNIQUES:
+        if (
+            not isinstance(self.weight_technique, str)
+            or self.weight_technique not in ALLOWED_WEIGHT_TECHNIQUES
+        ):
             raise ValueError(
                 f"weight_technique must be one of {sorted(ALLOWED_WEIGHT_TECHNIQUES)}; "
                 f"got {self.weight_technique}."
@@ -741,12 +783,16 @@ class AdaptiveWeights:
                 group_index = np.asarray(group_index, dtype=int)
 
                 # O(N log N) vectorized group norm calculations replacing the O(N*G) loop
-                unique_groups, inverse_indices = np.unique(group_index, return_inverse=True)
+                unique_groups, inverse_indices = np.unique(
+                    group_index, return_inverse=True
+                )
                 # Efficiently aggregate squared values by group using bincount
                 group_sums = np.bincount(inverse_indices, weights=tmp_weight**2)
                 norms = np.sqrt(group_sums)
 
-                self.group_weights_ = 1.0 / (np.power(norms, self.group_power_weight) + self.weight_tol)
+                self.group_weights_ = 1.0 / (
+                    np.power(norms, self.group_power_weight) + self.weight_tol
+                )
             else:
                 self.group_weights_ = self.group_weights
 
@@ -910,9 +956,7 @@ class Regressor(BaseModel, AdaptiveWeights):
         mx, my = beta_var.shape
         # Reshape weights to (mx, 1) for proper broadcasting across my outputs
         weights = np.asarray(self.individual_weights_).reshape(-1, 1)
-        pen = self.lambda1 * cp.sum_squares(
-            cp.multiply(weights, beta_var)
-        )
+        pen = self.lambda1 * cp.sum_squares(cp.multiply(weights, beta_var))
         return pen
 
     def _alasso(
