@@ -165,10 +165,11 @@ class BaseModel(BaseEstimator, RegressorMixin):
             )
         elif self.model == "logit":
             # Flatten both to 1D for universal element-wise multiply across single and multi-output
-            y_flat = cp.reshape(y, (y.shape[0] * y.shape[1],))
+            y_flat = cp.reshape(y, (y.shape[0] * y.shape[1],), order="F")
             pred_flat = cp.reshape(
                 model_prediction,
                 (model_prediction.shape[0] * model_prediction.shape[1],),
+                order="F",
             )
             return (1.0 / y.shape[0]) * cp.sum(
                 cp.logistic(pred_flat) - cp.multiply(y_flat, pred_flat)
@@ -553,6 +554,7 @@ class AdaptiveWeights:
                 np.searchsorted(explained_variance_ratio_cumsum, self.variability_pct)
                 + 1
             )
+            n_comp = min(n_comp, max_comp)  # Safety upper bound
             t = t[:, :n_comp]
             p = pca.components_[:n_comp].T
         else:
@@ -591,6 +593,12 @@ class AdaptiveWeights:
         """
         Weights based on the first partial least squares component
         """
+        if sparse.issparse(X):
+            raise ValueError(
+                "weight_technique='pls_1' does not support sparse matrices. "
+                "PLSRegression requires mean centering which would densify the matrix. "
+                "Convert to dense with X = X.toarray() before fitting."
+            )
         pls = PLSRegression(n_components=1, scale=False)
         pls.fit(X, y)
         tmp_weight = np.abs(pls.x_rotations_).ravel()
@@ -600,6 +608,12 @@ class AdaptiveWeights:
         """
         Weights based on partial least squares
         """
+        if sparse.issparse(X):
+            raise ValueError(
+                "weight_technique='pls_pct' does not support sparse matrices. "
+                "PLSRegression requires mean centering which would densify the matrix. "
+                "Convert to dense with X = X.toarray() before fitting."
+            )
         total_variance_in_x = np.sum(np.var(X, axis=0))
         pls = PLSRegression(n_components=np.min(X.shape) - 1, scale=False)
         pls.fit(X, y)
@@ -609,7 +623,8 @@ class AdaptiveWeights:
         )
         if self.variability_pct > np.max(fractions_of_explained_variance):
             warnings.warn(
-                f"The total explained variability using PLS reaches {np.max(fractions_of_explained_variance)}.",
+                f"variability_pct={self.variability_pct} was requested, but PLS "
+                f"attains a maximum of {np.max(fractions_of_explained_variance):.4f}",
                 RuntimeWarning,
                 stacklevel=2,
             )
@@ -633,6 +648,12 @@ class AdaptiveWeights:
         """
         Weights based on sparse principal component analysis.
         """
+        if sparse.issparse(X):
+            raise ValueError(
+                "weight_technique='sparse_pca' does not support sparse matrices. "
+                "SparsePCA requires dense input. "
+                "Convert to dense with X = X.toarray() before fitting."
+            )
         total_variance_in_x = np.sum(np.var(X, axis=0))
         spca = SparsePCA(
             n_components=np.min(X.shape) - 1,
@@ -649,7 +670,8 @@ class AdaptiveWeights:
         )
         if self.variability_pct > np.max(fractions_of_explained_variance):
             warnings.warn(
-                f"The total explained variability using Sparse PCA reaches {np.max(fractions_of_explained_variance)}.",
+                f"variability_pct={self.variability_pct} was requested, but Sparse PCA "
+                f"attains a maximum of {np.max(fractions_of_explained_variance):.4f}",
                 RuntimeWarning,
                 stacklevel=2,
             )

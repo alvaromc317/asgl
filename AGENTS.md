@@ -64,4 +64,21 @@ pip install -e .         # dev install in editable mode
 | Medium | `skmodels.py:446` | `target_tags.multi_output` was hardcoded `False`. | Fixed (2026-04-08) |
 | Medium | `skmodels.py:459` | `_more_tags()` returned invalid `binary_only` tag. | Fixed (2026-04-08) |
 | Medium | `skmodels.py:599` | `_wsparse_pca` had redundant centering. | Fixed (2026-04-08) |
-| Medium | `skmodels.py:568,600` | `np.var(X, axis=0)` densifies sparse matrices in weight methods. | Known limitation |
+| High | `skmodels.py:556` | `_wpca_pct` sparse branch missing `n_comp = min(n_comp, max_comp)` upper bound. | Fixed (2026-04-08) |
+| High | `skmodels.py:594` | `_wpls_1` throws no error for sparse but PLSRegression requires dense. | Fixed (2026-04-08) |
+| High | `skmodels.py:603` | `_wpls_pct` throws no error for sparse but PLSRegression + np.var require dense. | Fixed (2026-04-08) |
+| High | `skmodels.py:642` | `_wsparse_pca` throws no error for sparse but SparsePCA requires dense. | Fixed (2026-04-08) |
+
+## Sparse Matrix Handling
+
+**DO NOT demean sparse matrices** — it densifies them, defeating the purpose of sparse storage.
+
+- `PCA(svd_solver='arpack')` supports sparse natively — use for `pca_1` and `pca_pct` weight techniques
+- `PLSRegression` and `SparsePCA` require dense input — `_wpls_1`, `_wpls_pct`, `_wsparse_pca` raise `ValueError` with densification instructions for sparse input
+- `np.var(X, axis=0)` raises `AxisError` on sparse — but the methods using it now raise a clear sparse error first
+- See `.AI/docs/sparse_matrix_handling.md` and `.AI/plans/sparse_matrix_plan.md`
+
+## Warnings
+
+- **cvxpy FutureWarning** (12 occurrences, now fixed): `cp.reshape` without explicit `order` — use `order="F"` when reshaping
+- **RuntimeWarning** (2 occurrences): `variability_pct` exceeds achievable PLS/SparsePCA explained variance — informative, not a bug
