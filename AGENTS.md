@@ -16,7 +16,7 @@ When work is finished:
 ## Package Overview
 
 Single-package Python library for penalized regression (linear, quantile, logistic).
-Main entry point: `from asgl import Regressor` (class in `asgl/skmodels.py`).
+Main entry point: `from asgl import Regressor` (class in `asgl/regressor.py`).
 
 ## Developer Commands
 
@@ -32,8 +32,13 @@ pip install -e .         # dev install in editable mode
 
 ## Architecture Notes
 
-- `asgl/__init__.py` exports only `Regressor`.
-- Core logic lives in `asgl/skmodels.py`: `BaseModel` (base class) and `Regressor` (sklearn-compatible estimator).
+- `asgl/__init__.py` exports `Regressor`, `BaseModel`, `AdaptiveWeights`, and `ArrayOrSparse`.
+- Core logic is split into multiple modules:
+  - `asgl/constants.py`: Centralized constants and custom types.
+  - `asgl/utils.py`: Shared utility functions like `_get_group_info`.
+  - `asgl/base_model.py`: `BaseModel` (base class for penalized models).
+  - `asgl/adaptive_weights.py`: `AdaptiveWeights` (logic for weight estimation).
+  - `asgl/regressor.py`: `Regressor` (the primary sklearn-compatible estimator).
 - `Regressor` is sklearn-compatible — works with `GridSearchCV`, `RandomizedSearchCV`, `cross_val_predict`.
 - Group-indexed penalizations (gl, sgl, agl, asgl) require passing `group_index` array to `fit()`.
 
@@ -53,21 +58,23 @@ pip install -e .         # dev install in editable mode
 
 | Severity | Location | Description | Status |
 |----------|----------|-------------|--------|
-| Critical | `skmodels.py:163` | Logistic regression objective formula was mathematically incorrect. | Fixed (2026-04-08) |
-| Critical | `skmodels.py:506` | `_wpca_1` did not handle sparse matrices. | Fixed (2026-04-08) |
-| Critical | `skmodels.py:519` | `_wpca_pct` failed for sparse X when `variability_pct == 1`. | Fixed (2026-04-08) |
-| High | `skmodels.py:437` | `predict()` failed with multi-output y for logit. | Mitigated by #382 fix (2026-04-08) |
-| High | `skmodels.py:382` | Classifier validation allowed multi-output y. | Fixed (2026-04-08) |
-| High | `skmodels.py:529-534` | Dense `_wpca_pct` passed float to `PCA(n_components=)`. | Fixed (2026-04-08) |
-| High | `skmodels.py:586,620` | Inconsistent `n_comp` calculation across weight methods. | Fixed (2026-04-08) |
-| High | `skmodels.py:448` | `__sklearn_tags__()` did not set semantic `*_tags` objects. | Fixed (2026-04-08) |
-| Medium | `skmodels.py:446` | `target_tags.multi_output` was hardcoded `False`. | Fixed (2026-04-08) |
-| Medium | `skmodels.py:459` | `_more_tags()` returned invalid `binary_only` tag. | Fixed (2026-04-08) |
-| Medium | `skmodels.py:599` | `_wsparse_pca` had redundant centering. | Fixed (2026-04-08) |
-| High | `skmodels.py:556` | `_wpca_pct` sparse branch missing `n_comp = min(n_comp, max_comp)` upper bound. | Fixed (2026-04-08) |
-| High | `skmodels.py:594` | `_wpls_1` throws no error for sparse but PLSRegression requires dense. | Fixed (2026-04-08) |
-| High | `skmodels.py:603` | `_wpls_pct` throws no error for sparse but PLSRegression + np.var require dense. | Fixed (2026-04-08) |
-| High | `skmodels.py:642` | `_wsparse_pca` throws no error for sparse but SparsePCA requires dense. | Fixed (2026-04-08) |
+| Critical | `asgl/base_model.py` | Logistic regression objective formula was mathematically incorrect. | Fixed (2026-04-08) |
+| Critical | `asgl/adaptive_weights.py` | `_wpca_1` did not handle sparse matrices. | Fixed (2026-04-08) |
+| Critical | `asgl/adaptive_weights.py` | `_wpca_pct` failed for sparse X when `variability_pct == 1`. | Fixed (2026-04-08) |
+| High | `asgl/base_model.py` | `predict()` failed with multi-output y for logit. | Mitigated by #382 fix (2026-04-08) |
+| High | `asgl/base_model.py` | Classifier validation allowed multi-output y. | Fixed (2026-04-08) |
+| High | `asgl/adaptive_weights.py` | Dense `_wpca_pct` passed float to `PCA(n_components=)`. | Fixed (2026-04-08) |
+| High | `asgl/adaptive_weights.py` | Inconsistent `n_comp` calculation across weight methods. | Fixed (2026-04-08) |
+| High | `asgl/base_model.py` | `__sklearn_tags__()` did not set semantic `*_tags` objects. | Fixed (2026-04-08) |
+| Medium | `asgl/base_model.py` | `target_tags.multi_output` was hardcoded `False`. | Fixed (2026-04-08) |
+| Medium | `asgl/base_model.py` | `_more_tags()` returned invalid `binary_only` tag. | Fixed (2026-04-08) |
+| Medium | `asgl/adaptive_weights.py` | `_wsparse_pca` had redundant centering. | Fixed (2026-04-08) |
+| High | `asgl/adaptive_weights.py` | `_wpca_pct` sparse branch missing `n_comp = min(n_comp, max_comp)` upper bound. | Fixed (2026-04-08) |
+| High | `asgl/adaptive_weights.py` | `_wpls_1` throws no error for sparse but PLSRegression requires dense. | Fixed (2026-04-08) |
+| High | `asgl/adaptive_weights.py` | `_wpls_pct` throws no error for sparse but PLSRegression + np.var require dense. | Fixed (2026-04-08) |
+| High | `asgl/adaptive_weights.py` | `_wpca_pct` dense branch was inefficient (arpack) and crashed on min(X.shape)==1. | Fixed (2026-04-26) |
+| High | `asgl/adaptive_weights.py` | `_wpca_pct` sparse branch crashed on min(X.shape)==1. | Fixed (2026-04-26) |
+| High | `asgl/adaptive_weights.py` | `_wsparse_pca` throws no error for sparse but SparsePCA requires dense. | Fixed (2026-04-08) |
 
 ## Sparse Matrix Handling
 
@@ -82,3 +89,14 @@ pip install -e .         # dev install in editable mode
 
 - **cvxpy FutureWarning** (12 occurrences, now fixed): `cp.reshape` without explicit `order` — use `order="F"` when reshaping
 - **RuntimeWarning** (2 occurrences): `variability_pct` exceeds achievable PLS/SparsePCA explained variance — informative, not a bug
+
+## Repository Map
+
+A full codemap is available at `codemap.md` in the project root.
+
+Before working on any task, read `codemap.md` to understand:
+- Project architecture and entry points
+- Directory responsibilities and design patterns
+- Data flow and integration points between modules
+
+For deep work on a specific folder, also read that folder's `codemap.md`.

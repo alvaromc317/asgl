@@ -1,5 +1,26 @@
 # AI Agent Journal
 
+## 2026-04-26 — PCA Optimization and Edge Case Fix
+
+### Optimization: `_wpca_pct` Performance
+
+Optimized the dense branch of `_wpca_pct` in `asgl/skmodels.py`. 
+- **Change**: Switched from `svd_solver="arpack"` to `svd_solver="full"`.
+- **Reason**: The standard LAPACK SVD solver is much faster for computing almost all components of dense matrices than the iterative ARPACK solver.
+- **Parity**: Exact numerical parity is maintained by keeping the manual `np.searchsorted` logic for selecting `n_comp`.
+
+### Bug Fix: PCA Edge Cases
+
+Fixed `ValueError` crashes in `_wpca_pct` for small datasets where `min(X.shape) == 1`.
+- **Dense**: Removed the `max_comp = np.min(X.shape) - 1` cap. Now uses `n_components=None` which correctly handles single-feature/single-sample cases.
+- **Sparse**: Added a check for `np.min(X.shape) > 1`. If `min == 1`, it now densifies and uses the optimized dense logic, bypassing ARPACK's "k < min(n, p)" limitation.
+
+### Verification
+- Full `pytest` suite passed (68 tests).
+- Dedicated edge case verification script passed for both dense and sparse single-feature scenarios.
+
+---
+
 ## 2026-04-08 — Second Code Review + Sparse Fixes
 
 ### Independent Code Review (4 oracle agents)

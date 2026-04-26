@@ -1,5 +1,5 @@
 import warnings
-from asgl.skmodels import Regressor
+from asgl.regressor import Regressor
 import numpy as np
 import cvxpy as cp
 
