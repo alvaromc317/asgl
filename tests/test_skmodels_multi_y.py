@@ -1,6 +1,9 @@
 import numpy as np
+from pathlib import Path
 from asgl import Regressor
 from sklearn.model_selection import GridSearchCV
+
+_DATA = Path(__file__).parent / "data.csv"
 
 
 # ------------------------------------------------------------------
@@ -19,7 +22,7 @@ from sklearn.model_selection import GridSearchCV
 
 def _load_multivariate_data(n_outputs=3):
     """Load base data and create multivariate y"""
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     y_base = data[:, -1]
     # Create multivariate y by stacking multiple transformations
@@ -327,7 +330,7 @@ def test_multioutput_many_outputs():
 
 def test_multioutput_single_output_backward_compat():
     """Ensure single output still works correctly"""
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     y = data[:, -1]
 

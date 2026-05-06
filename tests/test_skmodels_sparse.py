@@ -1,9 +1,13 @@
 import pytest
 import numpy as np
+from pathlib import Path
 from asgl import Regressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error
 from scipy import sparse
+
+_DATA = Path(__file__).parent / "data.csv"
+_DATA_LOGIT = Path(__file__).parent / "data_logit.csv"
 
 
 # ------------------------------------------------------------------
@@ -19,7 +23,7 @@ from scipy import sparse
     ],
 )
 def test_bad_constructor_arguments_raises(bad_kwargs):
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -46,7 +50,7 @@ def test_estimator_type_tags():
 # ------------------------------------------------------------------
 @pytest.mark.parametrize("penalty", [None, "lasso", "ridge"])
 def test_linear_regression_basic_behaviour(penalty):
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     X = sparse.csr_matrix(X)
@@ -69,7 +73,7 @@ def test_linear_regression_basic_behaviour(penalty):
 # ------------------------------------------------------------------
 @pytest.mark.parametrize("penalty", [None, "lasso", "ridge"])
 def test_logistic_classifier_api(penalty):
-    data = np.loadtxt("data_logit.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA_LOGIT, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1].astype("int")
@@ -92,7 +96,7 @@ def test_logistic_classifier_api(penalty):
 
 
 def test_unpenalized_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -127,7 +131,7 @@ def test_unpenalized_lm():
 
 
 def test_unpenalized_qr():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -178,7 +182,7 @@ def test_unpenalized_qr():
 
 
 def test_unpenalized_logit():
-    data = np.loadtxt("data_logit.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA_LOGIT, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1].astype("int")
@@ -210,7 +214,7 @@ def test_unpenalized_logit():
 
 
 def test_lasso_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -261,7 +265,7 @@ def test_lasso_lm():
 
 
 def test_lasso_qr():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -355,7 +359,7 @@ def test_lasso_qr():
 
 
 def test_ridge_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -409,7 +413,7 @@ def test_ridge_lm():
 
 
 def test_gl_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -461,7 +465,7 @@ def test_gl_lm():
 
 
 def test_gl_qr():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -556,7 +560,7 @@ def test_gl_qr():
 
 
 def test_sgl_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -662,7 +666,7 @@ def test_sgl_lm():
 
 
 def test_sgl_qr():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -817,7 +821,7 @@ def test_sgl_qr():
 
 
 def test_alasso_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -1152,7 +1156,7 @@ def test_alasso_lm():
 
 
 def test_alasso_qr():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -1221,7 +1225,7 @@ def test_alasso_qr():
 
 
 def test_aridge_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -1558,7 +1562,7 @@ def test_aridge_lm():
 
 
 def test_agl_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -1712,7 +1716,7 @@ def test_agl_lm():
 
 
 def test_agl_qr():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -1783,7 +1787,7 @@ def test_agl_qr():
 
 
 def test_asgl_lm():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -1943,7 +1947,7 @@ def test_asgl_lm():
 
 
 def test_asgl_qr():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -2016,7 +2020,7 @@ def test_asgl_qr():
 
 
 def test_errors():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -2059,7 +2063,7 @@ def test_negative_group_index_raises_error():
 
 
 def test_predict():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]
@@ -2084,7 +2088,7 @@ def test_predict():
 
 
 def test_grid_search():
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = data[:, :-1]
     X = sparse.csr_matrix(X)
     y = data[:, -1]

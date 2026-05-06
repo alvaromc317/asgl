@@ -1,7 +1,10 @@
 import numpy as np
+from pathlib import Path
 from asgl import Regressor
 from sklearn.model_selection import GridSearchCV
 from scipy import sparse
+
+_DATA = Path(__file__).parent / "data.csv"
 
 
 # ------------------------------------------------------------------
@@ -19,7 +22,7 @@ from scipy import sparse
 
 def _load_multivariate_data_sparse(n_outputs=3):
     """Load base data, create sparse X, and multivariate y"""
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X = sparse.csr_matrix(data[:, :-1])
     y_base = data[:, -1]
     # Create multivariate y by stacking multiple transformations
@@ -382,7 +385,7 @@ def test_multioutput_sparse_gridsearch():
 def test_multioutput_sparse_vs_dense():
     """Test that sparse and dense X produce similar results"""
     # Load dense data
-    data = np.loadtxt("data.csv", delimiter=",", dtype=float)
+    data = np.loadtxt(_DATA, delimiter=",", dtype=float)
     X_dense = data[:, :-1]
     y_base = data[:, -1]
     y = np.column_stack([y_base, y_base * 0.5 + 10])
