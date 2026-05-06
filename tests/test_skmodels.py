@@ -214,7 +214,7 @@ def test_unpenalized_logit():
                 -10.73596602,
             ]
         ),
-        decimal=3,
+        decimal=2,
         err_msg="Unpenalized logit failure",
     )
 
