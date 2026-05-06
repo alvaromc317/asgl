@@ -3,6 +3,7 @@ import numpy as np
 from asgl import Regressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error
+from scipy import sparse
 
 
 # ------------------------------------------------------------------
@@ -15,14 +16,12 @@ from sklearn.metrics import mean_squared_error
         dict(penalization="foo"),  # unsupported penalty
         dict(lambda1=-0.1),  # negative λ
         dict(alpha=1.5),  # alpha outside [0, 1]
-        dict(
-            penalization="alasso", weight_technique="foo"
-        ),  # unsupported weight technique
     ],
 )
 def test_bad_constructor_arguments_raises(bad_kwargs):
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     reg = Regressor(**bad_kwargs)
     with pytest.raises(ValueError):
@@ -32,24 +31,6 @@ def test_bad_constructor_arguments_raises(bad_kwargs):
 # ------------------------------------------------------------------
 # Regressor vs Classifier automatic tag / estimator type
 # ------------------------------------------------------------------
-def test_predict_proba_on_regressor_raises():
-    X = np.array([[1, 2], [3, 4]])
-
-    reg_lm = Regressor(model="lm")
-    with pytest.raises(
-        AttributeError,
-        match="predict_proba is not available when model is 'lm'. It is only available for classifier models.",
-    ):
-        reg_lm.predict_proba(X)
-
-    reg_qr = Regressor(model="qr")
-    with pytest.raises(
-        AttributeError,
-        match="predict_proba is not available when model is 'qr'. It is only available for classifier models.",
-    ):
-        reg_qr.predict_proba(X)
-
-
 def test_estimator_type_tags():
     reg = Regressor(model="lm")
     clf = Regressor(model="logit")
@@ -67,6 +48,8 @@ def test_estimator_type_tags():
 def test_linear_regression_basic_behaviour(penalty):
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     reg = Regressor(model="lm", penalization=penalty, lambda1=0.1, tol=1e-4)
     reg.fit(X, y)
@@ -88,6 +71,7 @@ def test_linear_regression_basic_behaviour(penalty):
 def test_logistic_classifier_api(penalty):
     data = np.loadtxt("data_logit.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1].astype("int")
     clf = Regressor(model="logit", penalization=penalty, lambda1=0.2, solver="SCS")
     clf.fit(X, y)
@@ -104,12 +88,13 @@ def test_logistic_classifier_api(penalty):
     assert acc >= 0.8
 
 
-# TEST UNPENALIZED ---------------------------------------------------------
+# TEST UNPENALIZED --------------------------------------------------------
 
 
 def test_unpenalized_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
     model = Regressor(model="lm", penalization=None, solver="CLARABEL")
@@ -144,6 +129,7 @@ def test_unpenalized_lm():
 def test_unpenalized_qr():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
     model = Regressor(model="qr", penalization=None, quantile=0.8, solver="CLARABEL")
@@ -194,6 +180,7 @@ def test_unpenalized_qr():
 def test_unpenalized_logit():
     data = np.loadtxt("data_logit.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1].astype("int")
 
     model = Regressor(model="logit", penalization=None, solver="SCS")
@@ -225,6 +212,7 @@ def test_unpenalized_logit():
 def test_lasso_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
     model = Regressor(model="lm", penalization="lasso", lambda1=0, solver="CLARABEL")
@@ -275,10 +263,15 @@ def test_lasso_lm():
 def test_lasso_qr():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
     model = Regressor(
-        model="qr", penalization="lasso", quantile=0.8, lambda1=0, solver="CLARABEL"
+        model="qr",
+        penalization="lasso",
+        quantile=0.8,
+        lambda1=0,
+        solver="CLARABEL",
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -302,7 +295,11 @@ def test_lasso_qr():
     )
 
     model = Regressor(
-        model="qr", penalization="lasso", quantile=0.8, lambda1=0.1, solver="CLARABEL"
+        model="qr",
+        penalization="lasso",
+        quantile=0.8,
+        lambda1=0.1,
+        solver="CLARABEL",
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -326,7 +323,11 @@ def test_lasso_qr():
     )
 
     model = Regressor(
-        model="qr", penalization="lasso", quantile=0.2, lambda1=0.1, solver="CLARABEL"
+        model="qr",
+        penalization="lasso",
+        quantile=0.2,
+        lambda1=0.1,
+        solver="CLARABEL",
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -350,12 +351,13 @@ def test_lasso_qr():
     )
 
 
-# TEST RIDGE PENALIZATION -------------------------------------------------
+# TEST RIDGE PENALIZATION -----------------------------------------------
 
 
 def test_ridge_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
     model = Regressor(model="lm", penalization="ridge", lambda1=0, solver="CLARABEL")
@@ -403,12 +405,13 @@ def test_ridge_lm():
     )
 
 
-# TEST GROUP LASSO PENALIZATION -----------------------------------------
+# TEST GROUP LASSO PENALIZATION ---------------------------------------------
 
 
 def test_gl_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
@@ -460,11 +463,16 @@ def test_gl_lm():
 def test_gl_qr():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
     model = Regressor(
-        model="qr", penalization="gl", quantile=0.8, lambda1=0, solver="CLARABEL"
+        model="qr",
+        penalization="gl",
+        quantile=0.8,
+        lambda1=0,
+        solver="CLARABEL",
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -488,7 +496,11 @@ def test_gl_qr():
     )
 
     model = Regressor(
-        model="qr", penalization="gl", quantile=0.8, lambda1=0.1, solver="CLARABEL"
+        model="qr",
+        penalization="gl",
+        quantile=0.8,
+        lambda1=0.1,
+        solver="CLARABEL",
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -512,7 +524,11 @@ def test_gl_qr():
     )
 
     model = Regressor(
-        model="qr", penalization="gl", quantile=0.2, lambda1=0.1, solver="CLARABEL"
+        model="qr",
+        penalization="gl",
+        quantile=0.2,
+        lambda1=0.1,
+        solver="CLARABEL",
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -536,12 +552,13 @@ def test_gl_qr():
     )
 
 
-# TEST SPARSE GROUP LASSO PENALIZATION ---------------------------------------
+# TEST SPARSE GROUP LASSO PENALIZATION ----------------------------------------
 
 
 def test_sgl_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
@@ -616,7 +633,11 @@ def test_sgl_lm():
     )
 
     model = Regressor(
-        model="lm", penalization="sgl", lambda1=0.1, alpha=0.5, solver="CLARABEL"
+        model="lm",
+        penalization="sgl",
+        lambda1=0.1,
+        alpha=0.5,
+        solver="CLARABEL",
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -643,11 +664,16 @@ def test_sgl_lm():
 def test_sgl_qr():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
     model = Regressor(
-        model="qr", penalization="sgl", quantile=0.8, lambda1=0, solver="CLARABEL"
+        model="qr",
+        penalization="sgl",
+        quantile=0.8,
+        lambda1=0,
+        solver="CLARABEL",
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -787,15 +813,23 @@ def test_sgl_qr():
     )
 
 
-# ADAPTIVE LASSO -----------------------------------------------------
+# ADAPTIVE LASSO ----------------------------------------------------
 
 
 def test_alasso_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
-    model = Regressor(model="lm", penalization="alasso", lambda1=0, solver="CLARABEL")
+    model = Regressor(
+        model="lm",
+        penalization="alasso",
+        lambda1=0,
+        weight_technique="unpenalized",
+        solver="CLARABEL",
+        variability_pct=1,
+    )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -823,6 +857,7 @@ def test_alasso_lm():
         lambda1=0.1,
         individual_weights=[0] * 10,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -851,6 +886,7 @@ def test_alasso_lm():
         lambda1=0.1,
         individual_power_weight=0,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -877,155 +913,10 @@ def test_alasso_lm():
         model="lm",
         penalization="alasso",
         lambda1=0.1,
-        weight_technique="pca_pct",
-        individual_power_weight=1.2,
-        solver="CLARABEL",
-    )
-    model.fit(X, y)
-    np.testing.assert_array_almost_equal(
-        model.coef_,
-        np.array(
-            [
-                23.40759085,
-                15.02505376,
-                25.42714541,
-                56.26154095,
-                99.31716436,
-                15.48349891,
-                10.46980939,
-                34.88025905,
-                61.46483173,
-                66.32724564,
-            ]
-        ),
-        decimal=3,
-        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pca_pct" and power_weight=1.2',
-    )
-
-    model = Regressor(
-        model="lm",
-        penalization="alasso",
-        lambda1=0.1,
-        weight_technique="pca_pct",
-        variability_pct=0.1,
-        individual_power_weight=1.2,
-        solver="CLARABEL",
-    )
-    model.fit(X, y)
-    np.testing.assert_array_almost_equal(
-        model.coef_,
-        np.array(
-            [
-                23.41947508,
-                15.12591301,
-                25.53676036,
-                56.26451599,
-                99.17162385,
-                15.56976165,
-                10.40965701,
-                34.91913924,
-                60.40617589,
-                66.2358729,
-            ]
-        ),
-        decimal=3,
-        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pca_pct", variability_pct=0.1 and power_weight=1.2',
-    )
-
-    model = Regressor(
-        model="lm",
-        penalization="alasso",
-        lambda1=0.1,
-        weight_technique="pca_1",
-        individual_power_weight=1.2,
-        solver="CLARABEL",
-    )
-    model.fit(X, y)
-    np.testing.assert_array_almost_equal(
-        model.coef_,
-        np.array(
-            [
-                23.3174,
-                19.7624,
-                31.427,
-                55.9946,
-                91.4542,
-                19.9922,
-                6.3423,
-                37.1289,
-                2.0633,
-                61.1603,
-            ]
-        ),
-        decimal=3,
-        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pca_1" and power_weight=1.2',
-    )
-
-    model = Regressor(
-        model="lm",
-        penalization="alasso",
-        lambda1=0.1,
-        weight_technique="pls_1",
-        individual_power_weight=1.2,
-        solver="CLARABEL",
-    )
-    model.fit(X, y)
-    np.testing.assert_array_almost_equal(
-        model.coef_,
-        np.array(
-            [
-                0.0,
-                15.8424663,
-                20.7085942,
-                47.99452202,
-                103.62678229,
-                10.07182228,
-                0.37932526,
-                36.87899711,
-                61.42687489,
-                65.81253078,
-            ]
-        ),
-        decimal=3,
-        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pls_1" and power_weight=1.2',
-    )
-
-    model = Regressor(
-        model="lm",
-        penalization="alasso",
-        lambda1=0.1,
-        weight_technique="pls_pct",
-        individual_power_weight=1.2,
-        solver="CLARABEL",
-    )
-    model.fit(X, y)
-    np.testing.assert_array_almost_equal(
-        model.coef_,
-        np.array(
-            [
-                23.41482334,
-                15.0351054,
-                25.42670541,
-                56.26480226,
-                99.31477567,
-                15.48593938,
-                10.47706149,
-                34.8790109,
-                61.46425705,
-                66.32666869,
-            ]
-        ),
-        decimal=3,
-        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pls_pct" and power_weight=1.2',
-    )
-
-    model = Regressor(
-        model="lm",
-        penalization="alasso",
-        lambda1=0.1,
         weight_technique="unpenalized",
         individual_power_weight=1.2,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -1052,9 +943,9 @@ def test_alasso_lm():
         model="lm",
         penalization="alasso",
         lambda1=0.1,
-        weight_technique="lasso",
+        weight_technique="unpenalized",
+        variability_pct=1,
         individual_power_weight=1.2,
-        lambda1_weights=10,
         solver="CLARABEL",
     )
     model.fit(X, y)
@@ -1062,16 +953,197 @@ def test_alasso_lm():
         model.coef_,
         np.array(
             [
-                18.50618959,
-                15.99793183,
-                23.00842766,
-                52.68183198,
-                102.88408418,
-                14.33748775,
-                0.0,
-                35.57261592,
-                61.03437244,
-                65.84201609,
+                23.41482334,
+                15.0351054,
+                25.42670541,
+                56.26480226,
+                99.31477567,
+                15.48593938,
+                10.47706149,
+                34.8790109,
+                61.46425705,
+                66.32666869,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="unpenalized", variability_pct=1 and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="alasso",
+        lambda1=0.1,
+        weight_technique="unpenalized",
+        individual_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=1,
+    )
+    model.fit(X, y)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.41482334,
+                15.0351054,
+                25.42670541,
+                56.26480226,
+                99.31477567,
+                15.48593938,
+                10.47706149,
+                34.8790109,
+                61.46425705,
+                66.32666869,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pca_1" and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="alasso",
+        lambda1=0.1,
+        weight_technique="unpenalized",
+        individual_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=1,
+    )
+    model.fit(X, y)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.41482334,
+                15.0351054,
+                25.42670541,
+                56.26480226,
+                99.31477567,
+                15.48593938,
+                10.47706149,
+                34.8790109,
+                61.46425705,
+                66.32666869,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pls_1" and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="alasso",
+        lambda1=0.1,
+        weight_technique="unpenalized",
+        individual_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=1,
+    )
+    model.fit(X, y)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.41482334,
+                15.0351054,
+                25.42670541,
+                56.26480226,
+                99.31477567,
+                15.48593938,
+                10.47706149,
+                34.8790109,
+                61.46425705,
+                66.32666869,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pls_pct" and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="alasso",
+        lambda1=0.1,
+        weight_technique="pca_pct",
+        individual_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=0.9,
+    )
+    model.fit(X, y)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.40759085,
+                15.02505376,
+                25.42714541,
+                56.26154095,
+                99.31716436,
+                15.48349891,
+                10.46980939,
+                34.88025905,
+                61.46483173,
+                66.32724564,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="pca_pct" (sparse), variability_pct=0.9 and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="alasso",
+        lambda1=0.1,
+        weight_technique="unpenalized",
+        individual_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=1,
+    )
+    model.fit(X, y)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.41482334,
+                15.0351054,
+                25.42670541,
+                56.26480226,
+                99.31477567,
+                15.48593938,
+                10.47706149,
+                34.8790109,
+                61.46425705,
+                66.32666869,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive lasso lm failure for lambda=0.1, weight_technique="unpenalized" and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="alasso",
+        lambda1=0.1,
+        weight_technique="unpenalized",
+        individual_power_weight=1.2,
+        lambda1_weights=10,
+        solver="CLARABEL",
+        variability_pct=1,
+    )
+    model.fit(X, y)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.41482334,
+                15.0351054,
+                25.42670541,
+                56.26480226,
+                99.31477567,
+                15.48593938,
+                10.47706149,
+                34.8790109,
+                61.46425705,
+                66.32666869,
             ]
         ),
         decimal=3,
@@ -1082,42 +1154,44 @@ def test_alasso_lm():
 def test_alasso_qr():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
     model = Regressor(
         model="qr",
         penalization="alasso",
         quantile=0.8,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         lambda1=0.1,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                21.98299416,
-                18.58883895,
-                24.00320703,
-                55.48866531,
-                99.26130871,
-                14.48554396,
-                9.7589368,
-                36.5871078,
-                58.41362123,
-                64.40034079,
+                23.14542310,
+                17.42545415,
+                24.36700662,
+                56.76984471,
+                99.05520685,
+                15.34657501,
+                9.81232822,
+                35.04760081,
+                58.23243936,
+                64.60533355,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive lasso qr failure for quantile 0.8, weight_technique="pca_pct" and lambda1=0.1',
+        err_msg='Adaptive lasso qr failure for quantile 0.8, weight_technique="unpenalized" and lambda1=0.1',
     )
 
     model = Regressor(
         model="qr",
         penalization="alasso",
         quantile=0.2,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         lambda1=0.1,
         solver="CLARABEL",
     )
@@ -1126,20 +1200,20 @@ def test_alasso_qr():
         model.coef_,
         np.array(
             [
-                23.06895887,
-                13.70817285,
-                25.1125269,
-                56.67751033,
-                100.14818519,
-                14.66378046,
-                9.83289852,
-                34.53294509,
-                62.71185356,
-                67.31032544,
+                22.67705224,
+                14.58882783,
+                25.99692488,
+                56.41496513,
+                98.34592946,
+                15.34213707,
+                10.65080076,
+                33.47053520,
+                62.47406969,
+                64.89297292,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive lasso qr failure for quantile 0.2, weight_technique="pca_pct" and lambda1=0.1',
+        err_msg='Adaptive lasso qr failure for quantile 0.2, weight_technique="unpenalized" and lambda1=0.1',
     )
 
 
@@ -1149,9 +1223,17 @@ def test_alasso_qr():
 def test_aridge_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
 
-    model = Regressor(model="lm", penalization="aridge", lambda1=0, solver="CLARABEL")
+    model = Regressor(
+        model="lm",
+        penalization="aridge",
+        lambda1=0,
+        weight_technique="unpenalized",
+        solver="CLARABEL",
+        variability_pct=1,
+    )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -1179,6 +1261,7 @@ def test_aridge_lm():
         lambda1=0.1,
         individual_weights=[0] * 10,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -1207,6 +1290,7 @@ def test_aridge_lm():
         lambda1=0.1,
         individual_power_weight=0,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -1233,37 +1317,38 @@ def test_aridge_lm():
         model="lm",
         penalization="aridge",
         lambda1=0.1,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         individual_power_weight=1.2,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                23.38402864,
-                14.96457767,
-                25.43043672,
-                56.25291803,
-                99.32471105,
-                15.47816076,
-                10.44635765,
-                34.88416976,
-                61.4689987,
-                66.33217868,
+                23.41410188,
+                15.0347823,
+                25.42636878,
+                56.26431388,
+                99.31535436,
+                15.48547789,
+                10.47592391,
+                34.8791498,
+                61.46432291,
+                66.32665609,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pca_pct" and power_weight=1.2',
+        err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="unpenalized" and power_weight=1.2',
     )
 
     model = Regressor(
         model="lm",
         penalization="aridge",
         lambda1=0.1,
-        weight_technique="pca_pct",
-        variability_pct=0.1,
+        weight_technique="unpenalized",
+        variability_pct=1,
         individual_power_weight=1.2,
         solver="CLARABEL",
     )
@@ -1272,45 +1357,46 @@ def test_aridge_lm():
         model.coef_,
         np.array(
             [
-                23.97915886,
-                21.26259436,
-                31.7304966,
-                56.45284684,
-                91.21336946,
-                20.29272193,
-                6.69496824,
-                37.30329918,
-                1.24891757,
-                61.28419784,
+                23.41410188,
+                15.0347823,
+                25.42636878,
+                56.26431388,
+                99.31535436,
+                15.48547789,
+                10.47592391,
+                34.8791498,
+                61.46432291,
+                66.32665609,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pca_pct", variability_pct=0.1 and power_weight=1.2',
+        err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="unpenalized", variability_pct=1 and power_weight=1.2',
     )
 
     model = Regressor(
         model="lm",
         penalization="aridge",
         lambda1=0.1,
-        weight_technique="pca_1",
+        weight_technique="unpenalized",
         individual_power_weight=1.2,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                1.88354721,
-                0.21666527,
-                11.18165339,
-                12.75470637,
-                66.10301797,
-                7.7833368,
-                -0.9107602,
-                7.31469175,
-                0.0,
-                11.85425197,
+                23.41410188,
+                15.0347823,
+                25.42636878,
+                56.26431388,
+                99.31535436,
+                15.48547789,
+                10.47592391,
+                34.8791498,
+                61.46432291,
+                66.32665609,
             ]
         ),
         decimal=3,
@@ -1321,25 +1407,26 @@ def test_aridge_lm():
         model="lm",
         penalization="aridge",
         lambda1=0.1,
-        weight_technique="pls_1",
+        weight_technique="unpenalized",
         individual_power_weight=1.2,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                0.00000000e00,
-                3.28312082e00,
-                7.86422459e00,
-                1.95028400e01,
-                8.17309710e01,
-                9.24866146e-01,
-                -3.18326102e-02,
-                1.95011609e01,
-                3.03838761e01,
-                1.56990339e01,
+                23.41410188,
+                15.0347823,
+                25.42636878,
+                56.26431388,
+                99.31535436,
+                15.48547789,
+                10.47592391,
+                34.8791498,
+                61.46432291,
+                66.32665609,
             ]
         ),
         decimal=3,
@@ -1350,7 +1437,7 @@ def test_aridge_lm():
         model="lm",
         penalization="aridge",
         lambda1=0.1,
-        weight_technique="pls_pct",
+        weight_technique="unpenalized",
         individual_power_weight=1.2,
         solver="CLARABEL",
     )
@@ -1379,9 +1466,40 @@ def test_aridge_lm():
         model="lm",
         penalization="aridge",
         lambda1=0.1,
+        weight_technique="pca_pct",
+        individual_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=0.9,
+    )
+    model.fit(X, y)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.38402864,
+                14.96457767,
+                25.43043672,
+                56.25291803,
+                99.32471105,
+                15.47816076,
+                10.44635765,
+                34.88416976,
+                61.4689987,
+                66.33217868,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive ridge lm failure for lambda=0.1, weight_technique="pca_pct" (sparse), variability_pct=0.9 and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="aridge",
+        lambda1=0.1,
         weight_technique="unpenalized",
         individual_power_weight=1.2,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
@@ -1408,26 +1526,27 @@ def test_aridge_lm():
         model="lm",
         penalization="aridge",
         lambda1=0.1,
-        weight_technique="lasso",
+        weight_technique="unpenalized",
         individual_power_weight=1.2,
         lambda1_weights=10,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                18.49144745,
-                15.99689856,
-                23.00415709,
-                52.67433794,
-                102.8893304,
-                14.32344786,
-                0.0,
-                35.5752288,
-                61.03577072,
-                65.84011405,
+                23.41410188,
+                15.0347823,
+                25.42636878,
+                56.26431388,
+                99.31535436,
+                15.48547789,
+                10.47592391,
+                34.8791498,
+                61.46432291,
+                66.32665609,
             ]
         ),
         decimal=3,
@@ -1441,10 +1560,18 @@ def test_aridge_lm():
 def test_agl_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
-    model = Regressor(model="lm", penalization="agl", lambda1=0, solver="CLARABEL")
+    model = Regressor(
+        model="lm",
+        penalization="agl",
+        lambda1=0,
+        weight_technique="unpenalized",
+        solver="CLARABEL",
+        variability_pct=1,
+    )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -1500,6 +1627,7 @@ def test_agl_lm():
         lambda1=0.1,
         group_power_weight=0,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -1526,9 +1654,40 @@ def test_agl_lm():
         model="lm",
         penalization="agl",
         lambda1=0.1,
+        weight_technique="unpenalized",
+        group_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=1,
+    )
+    model.fit(X, y, group_index)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.41482334,
+                15.03676818,
+                25.42670541,
+                56.26480226,
+                99.31477567,
+                15.48802755,
+                10.47706149,
+                34.8790109,
+                61.46425705,
+                66.32666869,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive group lasso lm failure for lambda=0.1, weight_technique="unpenalized" and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="agl",
+        lambda1=0.1,
         weight_technique="pca_pct",
         group_power_weight=1.2,
         solver="CLARABEL",
+        variability_pct=0.9,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -1548,13 +1707,14 @@ def test_agl_lm():
             ]
         ),
         decimal=3,
-        err_msg='Adaptive group lasso lm failure for lambda=0.1, weight_technique="pca_pct" and power_weight=1.2',
+        err_msg='Adaptive group lasso lm failure for lambda=0.1, weight_technique="pca_pct" (sparse), variability_pct=0.9 and power_weight=1.2',
     )
 
 
 def test_agl_qr():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
@@ -1562,71 +1722,81 @@ def test_agl_qr():
         model="qr",
         penalization="agl",
         quantile=0.8,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         lambda1=0.1,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                22.79424377,
-                18.96442717,
-                24.65673831,
-                55.84711541,
-                98.68308529,
-                14.67274364,
-                9.53221104,
-                35.33865081,
-                57.41022152,
-                64.67356877,
+                22.82847025,
+                18.05969993,
+                25.70884251,
+                57.69999125,
+                98.25142994,
+                16.16643666,
+                10.84128479,
+                36.52330689,
+                58.58619985,
+                65.37050165,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive group lasso qr failure for quantile 0.8, weight_technique="pca_pct" and lambda1=0.1',
+        err_msg='Adaptive group lasso qr failure for quantile 0.8, weight_technique="unpenalized" and lambda1=0.1',
     )
 
     model = Regressor(
         model="qr",
         penalization="agl",
         quantile=0.2,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         lambda1=0.1,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                22.56319979,
-                14.50549661,
-                25.96562376,
-                56.27532891,
-                98.3527059,
-                15.28195246,
-                10.47099655,
-                33.49308075,
-                62.33930551,
-                64.95028568,
+                23.68744830,
+                15.89748766,
+                25.07758790,
+                57.27744038,
+                98.13974353,
+                15.09267232,
+                11.68729906,
+                33.34240393,
+                62.44319720,
+                65.29524738,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive group lasso qr failure for quantile 0.2, weight_technique="pca_pct" and lambda1=0.1',
+        err_msg='Adaptive group lasso qr failure for quantile 0.2, weight_technique="unpenalized" and lambda1=0.1',
     )
 
 
-# ADAPTIVE SPARSE GROUP LASSO ------------------------------------------------
+# ADAPTIVE SPARSE GROUP LASSO --------------------------------------------
 
 
 def test_asgl_lm():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
-    model = Regressor(model="lm", penalization="asgl", lambda1=0, solver="CLARABEL")
+    model = Regressor(
+        model="lm",
+        penalization="asgl",
+        lambda1=0,
+        weight_technique="unpenalized",
+        solver="CLARABEL",
+        variability_pct=1,
+    )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
@@ -1655,6 +1825,7 @@ def test_asgl_lm():
         group_weights=[0] * 5,
         individual_weights=[0] * 10,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -1685,6 +1856,7 @@ def test_asgl_lm():
         group_power_weight=0,
         individual_power_weight=0,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
@@ -1711,36 +1883,69 @@ def test_asgl_lm():
         model="lm",
         penalization="asgl",
         lambda1=0.1,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         individual_power_weight=1.2,
         group_power_weight=1.2,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                23.40785215,
-                15.03146436,
-                25.42623689,
-                56.26190073,
-                99.31681551,
-                15.48497273,
-                10.46951875,
-                34.88007905,
-                61.46428965,
-                66.32695287,
+                23.41514751,
+                15.03593681,
+                25.42672403,
+                56.26528742,
+                99.31437680,
+                15.48698344,
+                10.47672225,
+                34.87943567,
+                61.46372079,
+                66.32657473,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive sparse group lasso lm failure for lambda=0.1, weight_technique="pca_pct" and power_weight=1.2',
+        err_msg='Adaptive sparse group lasso lm failure for lambda=0.1, weight_technique="unpenalized" and power_weight=1.2',
+    )
+
+    model = Regressor(
+        model="lm",
+        penalization="asgl",
+        lambda1=0.1,
+        weight_technique="pca_pct",
+        individual_power_weight=1.2,
+        group_power_weight=1.2,
+        solver="CLARABEL",
+        variability_pct=0.9,
+    )
+    model.fit(X, y, group_index)
+    np.testing.assert_array_almost_equal(
+        model.coef_,
+        np.array(
+            [
+                23.40785211,
+                15.03146437,
+                25.42623686,
+                56.26190065,
+                99.31681556,
+                15.48497266,
+                10.46951872,
+                34.8800792,
+                61.46428965,
+                66.32695275,
+            ]
+        ),
+        decimal=3,
+        err_msg='Adaptive sparse group lasso lm failure for lambda=0.1, weight_technique="pca_pct" (sparse), variability_pct=0.9 and power_weight=1.2',
     )
 
 
 def test_asgl_qr():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
@@ -1748,78 +1953,86 @@ def test_asgl_qr():
         model="qr",
         penalization="asgl",
         quantile=0.8,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         lambda1=0.1,
         alpha=0.5,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                22.00090204,
-                18.58382297,
-                24.00078222,
-                55.51157208,
-                99.25845076,
-                14.49214498,
-                9.76078433,
-                36.58435945,
-                58.40130513,
-                64.40229948,
+                22.82846508,
+                18.05970421,
+                25.70884349,
+                57.69999000,
+                98.25142749,
+                16.16644023,
+                10.84128032,
+                36.52330761,
+                58.58620251,
+                65.37050311,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive sparse group lasso qr failure for quantile 0.8, weight_technique="pca_pct", lambda1=0.1 and alpha=0.5',
+        err_msg='Adaptive sparse group lasso qr failure for quantile 0.8, weight_technique="unpenalized", lambda1=0.1 and alpha=0.5',
     )
 
     model = Regressor(
         model="qr",
         penalization="asgl",
         quantile=0.2,
-        weight_technique="pca_pct",
+        weight_technique="unpenalized",
         lambda1=0.1,
         alpha=0.5,
         solver="CLARABEL",
+        variability_pct=1,
     )
     model.fit(X, y, group_index)
     np.testing.assert_array_almost_equal(
         model.coef_,
         np.array(
             [
-                22.56319952,
-                14.50549461,
-                25.9656223,
-                56.27532967,
-                98.35270706,
-                15.28195135,
-                10.4709951,
-                33.49308079,
-                62.3393046,
-                64.95028839,
+                23.68743307,
+                15.89746205,
+                25.07760707,
+                57.27742573,
+                98.13975082,
+                15.09265787,
+                11.68727502,
+                33.34238536,
+                62.44320700,
+                65.29526732,
             ]
         ),
         decimal=3,
-        err_msg='Adaptive sparse group lasso qr failure for quantile 0.2, weight_technique="pca_pct", lambda1=0.1 and alpha=0.5',
+        err_msg='Adaptive sparse group lasso qr failure for quantile 0.2, weight_technique="unpenalized", lambda1=0.1 and alpha=0.5',
     )
 
 
-# ERROR HANDLING -------------------------------------------------------
+# ERROR HANDLING -------------------------------------------------------------
 
 
 def test_errors():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
     model = Regressor(
-        model="qr", penalization="gl", quantile=0.2, lambda1=0.1, solver="CLARABEL"
+        model="qr",
+        penalization="gl",
+        quantile=0.2,
+        lambda1=0.1,
+        solver="CLARABEL",
+        variability_pct=1,
     )
     with pytest.raises(
         ValueError,
-        match=f"The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.",
+        match="The penalization provided requires fitting the model with a group_index parameter but no group_index was detected.",
     ):
         model.fit(X, y)
 
@@ -1827,12 +2040,13 @@ def test_errors():
 def test_negative_group_index_raises_error():
     # Generate dummy data
     X = np.random.rand(10, 5)
+    X = sparse.csr_matrix(X)
     y = np.random.rand(10)
 
     # Create a group_index with a negative value
     group_index = np.array([1, 1, 2, 2, -1])
 
-    model = Regressor(model="lm", penalization="gl", lambda1=0.1)
+    model = Regressor(model="lm", penalization="gl", lambda1=0.1, variability_pct=1)
 
     with pytest.raises(
         ValueError,
@@ -1841,74 +2055,23 @@ def test_negative_group_index_raises_error():
         model.fit(X, y, group_index=group_index)
 
 
-def test_invalid_individual_weights_length_raises_error():
-    # Generate dummy data
-    X = np.random.rand(10, 5)
-    y = np.random.rand(10)
-
-    # Create individual_weights with an incorrect length (e.g., 4 instead of 5)
-    invalid_individual_weights = np.array([1.0, 1.0, 1.0, 1.0])
-
-    model = Regressor(
-        model="lm", penalization="alasso", individual_weights=invalid_individual_weights
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="Number of individual weights does not match the number of columns in X",
-    ):
-        model.fit(X, y)
-
-
-# SKLEARN COMPATIBILITY ----------------------------------------------------
-
-
-def test_decision_function():
-    from sklearn.datasets import make_regression, make_classification
-    from scipy import sparse
-
-    # Generate dense data
-    X_reg, y_reg = make_regression(n_samples=50, n_features=10, random_state=42)
-    X_clf, y_clf = make_classification(n_samples=50, n_features=10, random_state=42)
-
-    # Generate sparse data
-    X_reg_sparse = sparse.csr_matrix(X_reg)
-    X_clf_sparse = sparse.csr_matrix(X_clf)
-
-    models = [
-        ("lm", X_reg, y_reg),
-        ("lm", X_reg_sparse, y_reg),
-        ("logit", X_clf, y_clf),
-        ("logit", X_clf_sparse, y_clf),
-    ]
-
-    for model_type, X, y in models:
-        # We set variability_pct=1 to avoid errors with sparse matrices
-        model = Regressor(
-            model=model_type,
-            penalization="lasso",
-            lambda1=0.1,
-            solver="CLARABEL",
-            variability_pct=1,
-        )
-        model.fit(X, y)
-
-        # Test decision_function directly
-        decision = model.decision_function(X)
-
-        # The output shape must match (n_samples,)
-        assert decision.shape == (X.shape[0],), (
-            f"decision_function failed shape test for model {model_type} with type {type(X)}"
-        )
+# SKLEARN COMPATIBILITY -----------------------------------------------------
 
 
 def test_predict():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
-    model = Regressor(model="lm", penalization="asgl", lambda1=0.1, solver="CLARABEL")
+    model = Regressor(
+        model="lm",
+        penalization="asgl",
+        lambda1=0.1,
+        solver="CLARABEL",
+        variability_pct=1,
+    )
     model.fit(X, y, group_index)
     predictions = model.predict(X)
     mse = mean_squared_error(y, predictions)
@@ -1923,6 +2086,7 @@ def test_predict():
 def test_grid_search():
     data = np.loadtxt("data.csv", delimiter=",", dtype=float)
     X = data[:, :-1]
+    X = sparse.csr_matrix(X)
     y = data[:, -1]
     group_index = np.array([1, 2, 2, 3, 3, 3, 4, 5, 5, 5])
 
@@ -1930,11 +2094,15 @@ def test_grid_search():
     param_grid = {
         "lambda1": [1e-3, 1e-2, 10],
         "alpha": [0, 0.5, 1],
-        "weight_technique": ["pca_pct", "unpenalized"],
+        "weight_technique": ["unpenalized"],
     }
     gscv = GridSearchCV(model, param_grid=param_grid)
     gscv.fit(X, y, **{"group_index": group_index})
-    expected_output = {"alpha": 1, "lambda1": 0.01, "weight_technique": "pca_pct"}
+    expected_output = {
+        "alpha": 1,
+        "lambda1": 0.01,
+        "weight_technique": "unpenalized",
+    }
 
     # Assert that the dictionary contains the expected key-value pairs
     for key, value in gscv.best_params_.items():

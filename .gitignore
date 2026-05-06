@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# ruff cache
+.ruff_cache/
+
 # Distribution / packaging
 .Python
 build/
@@ -136,3 +139,9 @@ dmypy.json
 README.Rmd
 .Rhistory
 deprecated_tests/
+*.code-workspace
+
+# Prompts
+LLM_prompts/
+
+**.DS_store

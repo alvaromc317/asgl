@@ -10,21 +10,35 @@ v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/li
 [![Package
 Version](https://img.shields.io/badge/version-2.1.4-blue.svg)](https://cran.r-project.org/package=asgl)
 
+## Fork of original asgl to incorporate sparse matrices
+
+This is a fork of asgl to incorporate sparse matrices.
+In addition to sparse matrix support, several other key features have been added:
+
+*   **Multivariate Regression:** Both linear ('lm') and quantile ('qr') models now support multiple outputs (Multivariate Y), allowing for simultaneous fitting and coupled feature selection with grouped penalizations.
+*   **Solver Fallbacks:** The `solver` parameter now accepts a list of solvers. If the primary solver fails, the model will automatically try subsequent solvers in the list or fall back to other installed CVXPY solvers.
+*   **Canonicalization Backends:** A new `canon_backend` parameter allows users to choose the CVXPY canonicalization backend (e.g., 'CPP', 'SCIPY', 'COO') for better performance or compatibility.
+
+Install via
+```
+uv pip install --upgrade git+https://github.com/zeyuz35/asgl.git
+```
+
 ## Introduction
 
 The `asgl` package is a versatile and robust tool designed for fitting a
 variety of regression models, including linear regression, quantile
 regression, logistic regression and various penalized regression models
-such as Lasso, Ridge, Group Lasso, Sparse Group Lasso, and their
-adaptive variants. The package is especially useful for simultaneous
-variable selection and prediction in both low and high-dimensional
-frameworks.
+such as Lasso, Ridge, Group Lasso, Sparse Group Lasso, and their adaptive
+variants.
+The package is especially useful for simultaneous variable selection and
+prediction in both low and high-dimensional frameworks.
 
 The primary class available to users is the `Regressor` class, which is
 detailed later in this document.
 
-`asgl` is based on cutting-edge research and methodologies, as outlined
-in the following papers:
+`asgl` is based on cutting-edge research and methodologies, as outlined in
+the following papers:
 
 - [Adaptive Sparse Group Lasso in Quantile
   Regression](https://link.springer.com/article/10.1007/s11634-020-00413-8)
@@ -32,19 +46,17 @@ in the following papers:
   Regression](https://arxiv.org/abs/2111.00472)
 
 For a practical introduction to the package, users can refer to the user
-guide notebook available in the GitHub repository. Additional accessible
-explanations can be found on [Towards Data Science: Sparse Group
-Lasso](https://towardsdatascience.com/sparse-group-lasso-in-python-255e379ab892),
-[Towards Data Science: Adaptive
-Lasso](https://towardsdatascience.com/an-adaptive-lasso-63afca54b80d)
-and [Towards Data Science: Quantile
-regression](https://towardsdatascience.com/squashing-the-average-a-dive-into-penalized-quantile-regression-for-python-8f3a996768b6).
+guide notebook available in the GitHub repository.
+Additional accessible explanations can be found on
+[Towards Data Science: Sparse Group Lasso](https://towardsdatascience.com/sparse-group-lasso-in-python-255e379ab892),
+[Towards Data Science: Adaptive Lasso](https://towardsdatascience.com/an-adaptive-lasso-63afca54b80d)
+and [Towards Data Science: Quantile regression](https://towardsdatascience.com/squashing-the-average-a-dive-into-penalized-quantile-regression-for-python-8f3a996768b6).
 
 ## Dependencies
 
 asgl requires:
 
-- Python \>= 3.9
+- Python \>= 3.10
 - cvxpy \>= 1.5.0
 - numpy \>= 1.20.0
 - scikit-learn \>= 1.6
@@ -57,8 +69,8 @@ The easiest way to install asgl is using `pip`:
 
     pip install asgl
 
-After installation, you can launch the test suite from the source
-directory (you will need to have `pytest >= 7.1.2` installed) by runnig:
+After installation, you can launch the test suite from the source directory
+(you will need to have `pytest >= 7.1.2` installed) by runnig:
 
     pytest
 
@@ -67,81 +79,94 @@ directory (you will need to have `pytest >= 7.1.2` installed) by runnig:
 The `Regressor` class includes the following list of parameters:
 
 - model: str, default=‘lm’
-  - Type of model to fit. Options are ‘lm’ (linear regression), ‘qr’
-    (quantile regression), ‘logit’ (logistic regression for binary
-    classification, output binary classification), ‘logit_proba’
-    (logistic regression for binary classification, output probability)
-    and ‘logit_raw’ (logistic regression for binary classification,
-    output score before logistic).
+  - Type of model to fit.
+    Options are ‘lm’ (linear regression), ‘qr’ (quantile regression),
+    and ‘logit’ (logistic regression for binary classification).
+    Both ‘lm’ and ‘qr’ models support multivariate regression (multiple outputs),
+    allowing for simultaneous fitting and coupled feature selection with
+    grouped penalizations.
 - penalization: str or None, default=‘lasso’
-  - Type of penalization to use. Options are ‘lasso’, ‘ridge’, ‘gl’
-    (group lasso), ‘sgl’ (sparse group lasso), ‘alasso’ (adaptive
-    lasso), ‘aridge’, ‘agl’ (adaptive group lasso), ‘asgl’ (adaptive
-    sparse group lasso), or None.
+  - Type of penalization to use.
+    Options are ‘lasso’, ‘ridge’, ‘gl’ (group lasso), ‘sgl’ (sparse group
+    lasso), ‘alasso’ (adaptive lasso), ‘aridge’, ‘agl’ (adaptive group
+    lasso), ‘asgl’ (adaptive sparse group lasso), or None.
 - quantile: float, default=0.5
-  - Quantile level for quantile regression models. Valid values are
-    between 0 and 1.
+  - Quantile level for quantile regression models.
+    Valid values are between 0 and 1.
 - fit_intercept: bool, default=True
   - Whether to fit an intercept in the model.
 - lambda1: float, default=0.1
   - Constant that multiplies the penalization, controlling the strength.
-    Must be a non-negative float i.e. in `[0, inf)`. Larger values will
-    result in larger penalizations.
+    Must be a non-negative float i.e. in `[0, inf)`.
+    Larger values will result in larger penalizations.
 - alpha: float, default=0.5
   - Constant that performs tradeoff between individual and group
-    penalizations in sgl and asgl penalizations. `alpha=1` enforces a
-    lasso penalization while `alpha=0` enforces a group lasso
-    penalization.
-- solver: str, default=‘default’
-  - Solver to be used by `cvxpy`. Default uses optimal alternative
-    depending on the problem. Users can check available solvers via the
+    penalizations in sgl and asgl penalizations.
+    `alpha=1` enforces a lasso penalization while `alpha=0` enforces a
+    group lasso penalization.
+- solver: str or list of str, default=‘default’
+  - Solver(s) to be used by `cvxpy`.
+    Default uses optimal alternative depending on the problem.
+    If a list is provided, the model will try each solver in order.
+    If the specified solver(s) fail, the model falls back to other installed solvers.
+    See [CVXPY Solvers](https://www.cvxpy.org/tutorial/advanced/index.html#solve-method-options)
+    for more information.
+    Users can check available solvers via the
     command `cvxpy.installed_solvers()`.
+- canon_backend: str, default=‘CPP’
+  - Canonicalization backend to be used by `cvxpy`.
+    Options include ‘CPP’ (default), ‘SCIPY’, and ‘COO’.
+    See [CVXPY Canonicalization Backends](https://www.cvxpy.org/tutorial/advanced/index.html#canonicalization-backends)
+    for more information.
 - weight_technique: str, default=‘pca_pct’
-  - Technique used to fit adaptive weights. Options include ‘pca_1’,
-    ‘pca_pct’, ‘pls_1’, ‘pls_pct’, ‘lasso’, ‘ridge’, ‘unpenalized’, and
-    ‘sparse_pca’. For low dimensional problems (where the number of
-    variables is smaller than the number of observations) the usage of
-    the ‘unpenalized’ or ‘ridge’ weight_techniques is encouraged. For
-    high dimensional problems (where the number of variables is larger
-    than the number of observations) the default ‘pca_pct’ is
-    encouraged.
+  - Technique used to fit adaptive weights.
+    Options include ‘pca_1’, ‘pca_pct’, ‘pls_1’, ‘pls_pct’, ‘lasso’,
+    ‘ridge’, ‘unpenalized’, and ‘sparse_pca’.
+    For low dimensional problems (where the number of variables is smaller
+    than the number of observations) the usage of the ‘unpenalized’ or
+    ‘ridge’ weight_techniques is encouraged.
+    For high dimensional problems (where the number of variables is larger
+    than the number of observations) the default ‘pca_pct’ is encouraged.
 - individual_power_weight: float, default=1
-  - Power to which individual weights are raised. This parameter only
-    has effect in adaptive penalizations. (‘alasso’ and ‘asgl’).
+  - Power to which individual weights are raised.
+    This parameter only has effect in adaptive penalizations.
+    (‘alasso’ and ‘asgl’).
 - group_power_weight: float, default=1
-  - Power to which group weights are raised. This parameter only has
-    effect in adaptive penalizations with a grouped structure (‘agl’ and
-    ‘asgl’).
+  - Power to which group weights are raised.
+    This parameter only has effect in adaptive penalizations with a
+    grouped structure (‘agl’ and ‘asgl’).
 - variability_pct: float, default=0.9
   - Percentage of variability explained by PCA, PLS, and sparse PCA
-    components. This parameter only has effect in adaptiv penalizations
-    where `weight_technique` is equal to ‘pca_pct’, ‘pls_pct’ or
-    ‘sparse_pca’.
+    components.
+    This parameter only has effect in adaptiv penalizations where
+    `weight_technique` is equal to ‘pca_pct’, ‘pls_pct’ or ‘sparse_pca’.
 - lambda1_weights: float, default=0.1
-  - The value of the parameter `lambda1` used to solve the lasso model
-    if `weight_technique='lasso'`
+  - The value of the parameter `lambda1` used to solve the lasso model if
+    `weight_technique='lasso'`
 - spca_alpha: float, default=1e-5
-  - Sparse PCA parameter. This parameter only has effect if
+  - Sparse PCA parameter.
+    This parameter only has effect if
     `weight_technique='sparse_pca'`See scikit-learn implementation for
     more details.
 - spca_ridge_alpha: float, default=1e-2
-  - Sparse PCA parameter. This parameter only has effect if
+  - Sparse PCA parameter.
+    This parameter only has effect if
     `weight_technique='sparse_pca'`See scikit-learn implementation for
     more details.
 - individual_weights: array or None, default=None
-  - Custom individual weights for adaptive penalizations. If this
-    parameter is informed, it overrides the weight estimation process
-    defined by parameter `weight_technique` and allows the user to
-    provide custom weights. It must be either `None` or be an array with
-    non-negative float values and length equal to the number of
-    variables.
+  - Custom individual weights for adaptive penalizations.
+    If this parameter is informed, it overrides the weight estimation
+    process defined by parameter `weight_technique` and allows the user to
+    provide custom weights.
+    It must be either `None` or be an array with non-negative float values
+    and length equal to the number of variables.
 - group_weights: array or None, default=None
-  - Custom group weights for adaptive penalizations. If this parameter
-    is informed, it overrides the weight estimation process defined by
-    parameter `weight_technique` and allows the user to provide custom
-    weights. It must be either `None` or be an array with non-negative
-    float values and length equal to the number of groups (as defined by
-    `group_index`)
+  - Custom group weights for adaptive penalizations.
+    If this parameter is informed, it overrides the weight estimation
+    process defined by parameter `weight_technique` and allows the user to
+    provide custom weights.
+    It must be either `None` or be an array with non-negative float values
+    and length equal to the number of groups (as defined by `group_index`)
 - tol: float, default=1e-4
   - Tolerance for coefficients to be considered zero.
 - weight_tol: float, default=1e-4
@@ -172,25 +197,27 @@ This example illustrates how to:
 
 - Generate synthetic regression data.
 - Split the data into training and testing sets.
-- Create a `Regressor` object configured for linear regression with
-  Lasso penalization.
+- Create a `Regressor` object configured for linear regression with Lasso
+  penalization.
 - Fit the model to the training data.
 - Make predictions on the test data.
 - Evaluate the model’s performance using mean squared error.
 
 ### Example 2: Quantile regression with Adaptive Sparse Group Lasso.
 
-Group-based penalizations like Group Lasso, Sparse Group Lasso, and
-their adaptive variants, assume that there is a group structure within
-the regressors. This structure can be useful in various applications,
-such as when using dummy variables where all the dummies of the same
-variable belong to the same group, or in genetic data analysis where
-genes are grouped into genetic pathways.
+Group-based penalizations like Group Lasso, Sparse Group Lasso, and their
+adaptive variants, assume that there is a group structure within the
+regressors.
+This structure can be useful in various applications, such as when using
+dummy variables where all the dummies of the same variable belong to the
+same group, or in genetic data analysis where genes are grouped into
+genetic pathways.
 
 For scenarios where the regressors have a known grouped structure, this
 information can be passed to the `Regressor` class during model fitting
-using the `group_index` parameter. This parameter is an array where each
-element indicates the group at which the associated variable belongs.
+using the `group_index` parameter.
+This parameter is an array where each element indicates the group at which
+the associated variable belongs.
 The following example demonstrates this with a synthetic group_index.
 The model will be optimized using scikit-learn’s `RandomizedSearchCV`
 function.
@@ -221,13 +248,14 @@ Adaptive Sparse Group Lasso penalization, utilizing scikit-learn’s
 ### Example 3: Logistic regression
 
 In binary classification tasks using logistic regression, the default
-decision threshold of 0.5 is used by default. But it might not always
-yield the best accuracy. By leveraging the `predict_proba`, you can
-obtain predicted probabilities and use them to find an optimal threshold
-that maximizes classification accuracy. This example demonstrates how to
-use `cross_val_predict` from scikit-learn to evaluate different
-thresholds and select the one that offers the highest accuracy for your
-classification model.
+decision threshold of 0.5 is used by default.
+But it might not always yield the best accuracy.
+By leveraging the `predict_proba`, you can obtain predicted probabilities
+and use them to find an optimal threshold that maximizes classification
+accuracy.
+This example demonstrates how to use `cross_val_predict` from scikit-learn
+to evaluate different thresholds and select the one that offers the highest
+accuracy for your classification model.
 
 ``` python
 import numpy as np
@@ -276,22 +304,22 @@ test_accuracy = accuracy_score(y_test, test_predictions)
 
 ### Example 4: Customizing weights for adaptive sparse group lasso
 
-The `asgl` package offers several built-in methods for estimating
-adaptive weights, controlled via the `weight_technique` parameter. For
-more details onto the inners of each of these alternatives, refer to the
-[associated research
-paper](https://link.springer.com/article/10.1007/s11634-020-00413-8) or
-to the user guide. However, for users requiring extensive customization,
-the package allows for the direct specification of custom weights
-through the `individual_weights` and `group_weights` parameters. This
-allows the users to implement their own weight computation techniques
+The `asgl` package offers several built-in methods for estimating adaptive
+weights, controlled via the `weight_technique` parameter.
+For more details onto the inners of each of these alternatives, refer to
+the [associated research paper](https://link.springer.com/article/10.1007/s11634-020-00413-8)
+or to the user guide.
+However, for users requiring extensive customization, the package allows
+for the direct specification of custom weights through the
+`individual_weights` and `group_weights` parameters.
+This allows the users to implement their own weight computation techniques
 and use them within the `asgl` framework.
 
-When using custom weights, ensure that the length of
-`individual_weights` matches the number of variables, and the length of
-`group_weights` matches the number of groups. Below is an example
-demonstrating how to fit a model with custom individual and group
-weights:
+When using custom weights, ensure that the length of `individual_weights`
+matches the number of variables, and the length of `group_weights` matches
+the number of groups.
+Below is an example demonstrating how to fit a model with custom individual
+and group weights:
 
 ``` python
 import numpy as np
@@ -332,10 +360,10 @@ mse = mean_squared_error(y_test, predictions)
 
 This example compares an implementation of lasso as available in
 `scikit-learn` against an adaptive lasso model built using the `asgl`
-library. Both models are optimized using 5-fold cross validation on a
-grid of hyper parameters, but ass demonstrated by the final MSEs
-computed on the test set, the adaptive lasso reduces by half the error
-compared to lasso.
+library.
+Both models are optimized using 5-fold cross validation on a grid of hyper
+parameters, but ass demonstrated by the final MSEs computed on the test
+set, the adaptive lasso reduces by half the error compared to lasso.
 
 ``` python
 import numpy as np
@@ -376,8 +404,8 @@ print(f"Adaptive lasso MSE: {alasso_mse}")
 
 ## Contributions
 
-Contributions are welcome! Please submit a pull request or open an issue
-to discuss your ideas.
+Contributions are welcome!
+Please submit a pull request or open an issue to discuss your ideas.
 
 ### Citation
 
@@ -390,28 +418,34 @@ Thank you for your support and we hope you find this package useful!
 
 ## License
 
-This project is licensed under the GPL-3.0 license. This means that the
-package is open source and that any copy or modification of the original
-code must also be released under the GPL-3.0 license. In other words,
-you can take the code, add to it or make major changes, and then openly
-distribute your version, but not profit from it.
+This project is licensed under the GPL-3.0 license.
+This means that the package is open source and that any copy or
+modification of the original code must also be released under the GPL-3.0
+license.
+In other words, you can take the code, add to it or make major changes,
+and then openly distribute your version, but not profit from it.
 
 ## What’s new?
 
 ### 2.1.4
 
-The package has been updated to fullfill `scikit-learn`’s requirements
-in regards to estimator class definition
+The package has been updated to fullfill `scikit-learn`’s requirements in
+regards to estimator class definition.
+Also, the quantile loss function implementation has been optimized using a
+residual splitting approach to improve efficiency by avoiding absolute
+value operations.
 
 ### 2.1.3
 
-Major internal re-structure. The logistic model has been fully rewritten
-to include function calls `decision_boundary` and `predict_proba`. Also,
-model types `logit_proba` and `logit_raw` have been removed. One can
-still obtain probabilities calling the standard scikit-learn function
-`predict_proba` while `predict` assigns class to the largest
-probability. Aside from that, the inners of the Regressor class have
-been fully rewritten with a cleaner faster implementation.
+Major internal re-structure.
+The logistic model has been fully rewritten to include function calls
+`decision_boundary` and `predict_proba`.
+Also, model types `logit_proba` and `logit_raw` have been removed.
+One can still obtain probabilities calling the standard scikit-learn
+function `predict_proba` while `predict` assigns class to the largest
+probability.
+Aside from that, the inners of the Regressor class have been fully
+rewritten with a cleaner faster implementation.
 
 ### 2.1.1
 
@@ -421,40 +455,43 @@ being part of the `coef_` attribute.
 ### 2.1.0
 
 The latest release of the `asgl` package, version 2.1.0, introduces
-powerful enhancements for logistic regression models. Users can now
-easily tackle binary classification problems by setting `model='logit'`.
-For more granular control, specify `model='logit_raw'` to retrieve
-outputs before logistic transformation, or `model='logit_proba'` for
-probability outputs. Additionally, this update includes the
-implementation of ridge and adaptive ridge penalizations, accessible via
-`penalization='ridge'` or `'aridge'`, allowing for more flexible model
-tuning.
+powerful enhancements for logistic regression models.
+Users can now easily tackle binary classification problems by setting
+`model='logit'`.
+For more granular control, specify `model='logit_raw'` to retrieve outputs
+before logistic transformation, or `model='logit_proba'` for probability
+outputs.
+Additionally, this update includes the implementation of ridge and adaptive
+ridge penalizations, accessible via `penalization='ridge'` or `'aridge'`,
+allowing for more flexible model tuning.
 
 ### 2.0.0
 
 With the release of version 2.0, the `asgl` package has undergone
-significant enhancements and improvements. The most notable change is
-the introduction of the `Regressor` object, which brings full
-compatibility with scikit-learn. This means that the `Regressor` object
-can now be used just like any other scikit-learn estimator, enabling
-seamless integration with scikit-learn’s extensive suite of tools for
-model evaluation, hyperparameter optimization, and performance metrics.
+significant enhancements and improvements.
+The most notable change is the introduction of the `Regressor` object,
+which brings full compatibility with scikit-learn.
+This means that the `Regressor` object can now be used just like any other
+scikit-learn estimator, enabling seamless integration with scikit-learn’s
+extensive suite of tools for model evaluation, hyperparameter optimization,
+and performance metrics.
 
 Key updates include:
 
 - Scikit-learn Compatibility: The `Regressor` class is now fully
-  compatible with scikit-learn. Users can leverage functionalities such
-  as `sklearn.model_selection.GridSearchCV` for hyperparameter tuning
-  and utilize various scikit-learn metrics and utilities to assess model
+  compatible with scikit-learn.
+  Users can leverage functionalities such as
+  `sklearn.model_selection.GridSearchCV` for hyperparameter tuning and
+  utilize various scikit-learn metrics and utilities to assess model
   performance.
 
 - Deprecation of `ASGL` class: The old `ASGL` class is still included in
-  the package for backward compatibility but is now deprecated. It will
-  raise a `DeprecationWarning` when used, as it is no longer supported
-  and will be removed in future versions. Users are strongly encouraged
-  to transition to the new `Regressor` class to take advantage of the
-  latest features and improvements.
+  the package for backward compatibility but is now deprecated.
+  It will raise a `DeprecationWarning` when used, as it is no longer
+  supported and will be removed in future versions.
+  Users are strongly encouraged to transition to the new `Regressor` class
+  to take advantage of the latest features and improvements.
 
-For users currently utilizing the `ASGL` class, we recommend switching
-to the `Regressor` class to ensure continued support and access to the
-latest functionalities.
+For users currently utilizing the `ASGL` class, we recommend switching to
+the `Regressor` class to ensure continued support and access to the latest
+functionalities.
