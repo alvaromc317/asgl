@@ -9,6 +9,9 @@ __pycache__/
 # ruff cache
 .ruff_cache/
 
+# Claude
+.claude
+
 # Distribution / packaging
 .Python
 build/
