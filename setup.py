@@ -25,7 +25,6 @@ setup(
     install_requires=["cvxpy >= 1.5.0",
                       "numpy >= 1.20.0",
                       "scikit-learn >= 1.6",
-                      "scipy >= 1.1",
-                      "pytest >= 7.1.2"],
-    packages=find_packages()
+                      "scipy >= 1.1"],
+    packages=find_packages(exclude=['tests', 'tests.*'])
 )
