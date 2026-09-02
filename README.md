@@ -26,7 +26,7 @@ Based on:
 - [`asgl`: A Python Package for Penalized Linear and Quantile Regression](https://arxiv.org/abs/2111.00472)
 
 The library has also been used in the research of:
-- [Tail-aware Vis–NIR calibration of soil traits: Partial and sparse-group-lasso quantile regression versus PLS on the LUCAS library+(https://doi.org/10.1016/j.chemolab.2026.105877)
+- [Tail-aware Vis–NIR calibration of soil traits: Partial and sparse-group-lasso quantile regression versus PLS on the LUCAS library](https://doi.org/10.1016/j.chemolab.2026.105877)
 
 ---
 
