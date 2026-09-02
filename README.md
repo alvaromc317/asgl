@@ -25,6 +25,9 @@ Based on:
 - [Adaptive Sparse Group Lasso in Quantile Regression](https://link.springer.com/article/10.1007/s11634-020-00413-8)
 - [`asgl`: A Python Package for Penalized Linear and Quantile Regression](https://arxiv.org/abs/2111.00472)
 
+The library has also been used in the research of:
+- [Tail-aware Vis–NIR calibration of soil traits: Partial and sparse-group-lasso quantile regression versus PLS on the LUCAS library+(https://doi.org/10.1016/j.chemolab.2026.105877)
+
 ---
 
 ## Features
